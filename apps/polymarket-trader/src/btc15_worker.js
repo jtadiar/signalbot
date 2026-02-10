@@ -503,7 +503,12 @@ async function main(){
         }
 
         if (bal > 0 && bal < minBalanceUsdc) {
-          log.warn({ slug: cur.slug, balance: bal, minBalanceUsdc }, 'BTC15_BALANCE_TOO_LOW');
+          const action = String(process.env.BALANCE_STOP_ACTION || 'skip').toLowerCase(); // skip | exit
+          log.warn({ slug: cur.slug, balance: bal, minBalanceUsdc, action }, 'BTC15_BALANCE_TOO_LOW');
+          if (action === 'exit') {
+            // User requested: stop trading and kill the worker when balance falls below threshold.
+            process.exit(0);
+          }
           await sleep(10_000);
           continue;
         }
