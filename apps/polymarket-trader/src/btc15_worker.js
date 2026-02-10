@@ -95,10 +95,48 @@ function depthNotionalTopAsks(book, maxLevels=5){
 
 const STATE_PATH = '/Users/jt/.openclaw/workspace/memory/btc15_worker_state.json';
 function loadState(){
-  try { return JSON.parse(fs.readFileSync(STATE_PATH,'utf8')); } catch { return { traded: {}, baseline: {} }; }
+  try {
+    const j = JSON.parse(fs.readFileSync(STATE_PATH,'utf8'));
+    // Back-compat defaults
+    if (!j || typeof j !== 'object') return { traded: {}, baseline: {}, t5History: [] };
+    if (!j.traded) j.traded = {};
+    if (!j.baseline) j.baseline = {};
+    if (!Array.isArray(j.t5History)) j.t5History = [];
+    return j;
+  } catch {
+    return { traded: {}, baseline: {}, t5History: [] };
+  }
 }
 function saveState(s){
   fs.writeFileSync(STATE_PATH, JSON.stringify(s, null, 2));
+}
+
+function recordT5Snapshot(state, slug, s0, s1) {
+  // Store one snapshot per window (captured around entry time), used for rolling lookback baseline.
+  if (!Array.isArray(state.t5History)) state.t5History = [];
+  if (state.t5History.some((r) => r && r.slug === slug)) return;
+
+  const upMid = num(s0?.mid);
+  const downMid = num(s1?.mid);
+  if (!(upMid > 0 && downMid > 0)) return;
+
+  state.t5History.push({ slug, ts: new Date().toISOString(), upMid, downMid });
+  // Keep last ~200 windows to cap file size.
+  if (state.t5History.length > 200) state.t5History = state.t5History.slice(-200);
+}
+
+function lookbackBaseUpMid(state, curSlug, n = 4) {
+  const rows = Array.isArray(state?.t5History) ? state.t5History : [];
+  const last = rows
+    .filter((r) => r && r.slug && r.slug !== curSlug && num(r.upMid) > 0)
+    .slice(-Math.max(1, Math.min(50, Math.floor(n * 5))));
+
+  // Sort by ts to get most recent N.
+  last.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+  const take = last.slice(-Math.max(1, Math.floor(n)));
+  if (!take.length) return 0;
+  const avg = take.reduce((acc, r) => acc + num(r.upMid), 0) / take.length;
+  return avg;
 }
 
 function relSpread(stats){
@@ -563,6 +601,12 @@ async function main(){
     const s0 = bestBidAsk(b0);
     const s1 = bestBidAsk(b1);
 
+    // Record a per-window snapshot to build rolling lookback baseline (last 4 windows).
+    try {
+      recordT5Snapshot(state, cur.slug, s0, s1);
+      saveState(state);
+    } catch {}
+
     log.info({ slug: cur.slug, note: 'ENTRY_SNAPSHOT', s0: { bid:s0.bid, ask:s0.ask, relSpread: +relSpread(s0).toFixed(3) }, s1: { bid:s1.bid, ask:s1.ask, relSpread:+relSpread(s1).toFixed(3) } }, 'BTC15_ENTRY_BOOK');
 
     // 6) Determine side.
@@ -576,16 +620,28 @@ async function main(){
       pick = existingSide;
       log.info({ slug: cur.slug, pick, note:'LOCK_EXISTING_SIDE_FOR_SECOND_TRANCHE', existingOutcome: existing?.outcome }, 'BTC15_SIDE_LOCK');
     } else if (forceSideMode === 'trend') {
-      // Trend vs baseline: compare current Up mid to baseline Up mid captured earlier in this window.
-      const base = state.baseline?.[cur.slug];
-      const baseUp = num(base?.upMid);
+      // Trend signal:
+      // 1) Prefer rolling lookback baseline from last N windows' T+5 Up mids (smoother)
+      // 2) Fallback to baseline captured earlier in THIS window
+      const lookbackN = Math.max(1, Math.min(12, Math.floor(num(process.env.LOOKBACK_WINDOWS || '4'))));
+      const lookbackDeadzone = num(process.env.LOOKBACK_DEADZONE || '0.01');
+
+      const baseLookbackUp = lookbackBaseUpMid(state, cur.slug, lookbackN);
+      const baseWindow = state.baseline?.[cur.slug];
+      const baseWindowUp = num(baseWindow?.upMid);
+
+      const baseUp = baseLookbackUp > 0 ? baseLookbackUp : baseWindowUp;
+      const baseSrc = baseLookbackUp > 0 ? `lookback_${lookbackN}` : 'window_baseline';
+
       const curUp = num(s0.mid);
       const delta = (baseUp > 0 && curUp > 0) ? (curUp - baseUp) : 0;
 
+      const dz = (baseSrc.startsWith('lookback')) ? lookbackDeadzone : trendDeadzone;
+
       // Deadzone so we don't flip on noise.
       if (baseUp > 0 && curUp > 0) {
-        if (delta > trendDeadzone) pick = 0;
-        else if (delta < -trendDeadzone) pick = 1;
+        if (delta > dz) pick = 0;
+        else if (delta < -dz) pick = 1;
         else {
           // If flat, prefer spot momentum (Coinbase BTC-USD) to avoid "cheapest" fighting the tape.
           // If momentum is too small or fetch fails, fall back to cheaper ask.
@@ -608,7 +664,7 @@ async function main(){
         pick = (s1.ask && s0.ask) ? (s1.ask < s0.ask ? 1 : 0) : 0;
       }
 
-      log.info({ slug: cur.slug, baseUp, curUp, delta: +delta.toFixed(4), trendDeadzone }, 'BTC15_SIDE_TREND');
+      log.info({ slug: cur.slug, baseUp, baseSrc, lookbackN, lookbackDeadzone, curUp, delta: +delta.toFixed(4), deadzoneUsed: dz, trendDeadzone }, 'BTC15_SIDE_TREND');
     } else if (forceSideMode === 'cheapest') {
       pick = (s1.ask && s0.ask) ? (s1.ask < s0.ask ? 1 : 0) : 0;
     }
