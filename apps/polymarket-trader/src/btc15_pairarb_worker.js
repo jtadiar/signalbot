@@ -135,8 +135,15 @@ function lockedProfitEstimate(w){
 }
 
 async function main(){
-  const secretsPath = path.join(process.env.HOME, '.config/polymarket/trader.env');
+  // Secrets/config file for this worker.
+  // Default: ~/.config/polymarket/pairarb.env (so it can use a separate wallet)
+  // Fallback: ~/.config/polymarket/trader.env
+  const secretsPath = process.env.PAIRARB_ENV_PATH
+    ? String(process.env.PAIRARB_ENV_PATH)
+    : path.join(process.env.HOME, '.config/polymarket/pairarb.env');
+  const fallbackSecretsPath = path.join(process.env.HOME, '.config/polymarket/trader.env');
   if (fs.existsSync(secretsPath)) loadSecretsEnv(secretsPath);
+  else if (fs.existsSync(fallbackSecretsPath)) loadSecretsEnv(fallbackSecretsPath);
 
   const signatureType = Number(process.env.SIGNATURE_TYPE ?? 0);
   const funder = process.env.FUNDER_ADDRESS;
