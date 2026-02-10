@@ -307,8 +307,9 @@ async function main(){
           const saneBookForSL = (bid > 0) && (ask > 0) && (mid > 0) && (spreadRel < 0.80);
 
           const soldFrac = num(t?.exit?.soldFrac || 0);
+          const baseSize = num(t.filledSize || t.size); // use filled size if known to avoid overselling
           const remainingFrac = Math.max(0, 1 - soldFrac);
-          const remainingSize = Math.floor((num(t.size) * remainingFrac) * 100) / 100;
+          const remainingSize = Math.floor((baseSize * remainingFrac) * 100) / 100;
           const profitPct = (bid > 0 && entryPx > 0) ? (bid / entryPx - 1) : 0;
 
           // Cap-aware exit: when bid is close to $1, upside is capped but downside isn't.
@@ -845,8 +846,10 @@ async function main(){
         throw new Error(`order not accepted (status=${resp.status})`);
       }
 
-      // Fetch confirmed trade fill price (matches Polymarket UI) when available.
+      // Fetch confirmed trade fill price + filled size (matches Polymarket UI) when available.
+      // IMPORTANT: orders can partially fill; exits must never assume intended size was fully filled.
       let fillPrice = null;
+      let filledSize = null;
       try {
         const ord = await client.getOrder(resp?.orderID);
         const tradeId = ord?.associate_trades?.[0];
@@ -854,8 +857,16 @@ async function main(){
           const trades = await client.getTrades({ id: tradeId });
           const t0 = Array.isArray(trades) ? trades[0] : trades;
           if (t0?.price) fillPrice = num(t0.price);
+          if (t0?.size) filledSize = num(t0.size);
         }
       } catch {}
+
+      // Fallbacks for filled size: prefer any filledSize returned by the order response.
+      if (!(filledSize > 0)) {
+        const fs0 = num(resp?.filledSize);
+        if (fs0 > 0) filledSize = fs0;
+      }
+      const effectiveSize = (filledSize && filledSize > 0) ? filledSize : size;
 
       // Persist traded flag (supports 2-tranche entries: T+5 then T+10)
       const prev = state.traded[cur.slug];
@@ -873,15 +884,15 @@ async function main(){
           orderID: prev.orderID,
           status: prev.status,
           // keep original refAsk/fillPrice for entryPx; track second tranche separately
-          tranche2: { orderID: resp?.orderID, status: resp?.status, limitPrice, refAsk, size, fillPrice, confidence },
-          size: +(num(prev.size) + num(size)).toFixed(2),
+          tranche2: { orderID: resp?.orderID, status: resp?.status, limitPrice, refAsk, size: effectiveSize, fillPrice, confidence, filledSize },
+          size: +(num(prev.size) + num(effectiveSize)).toFixed(2),
           attempts: attemptsNext,
           exit: prev.exit || { soldFrac: 0, tp1Done: false, tp2Done: false, slDone: false },
           addOn: prev.addOn || { done: false },
         };
       } else {
         // First tranche (or fresh state)
-        state.traded[cur.slug] = { ts: new Date().toISOString(), orderID: resp?.orderID, status: resp?.status, outcome, tokenID, limitPrice, refAsk, size, fillPrice, confidence, attempts: attemptsNext, exit: { soldFrac: 0, tp1Done: false, tp2Done: false, slDone: false }, addOn: { done: false } };
+        state.traded[cur.slug] = { ts: new Date().toISOString(), orderID: resp?.orderID, status: resp?.status, outcome, tokenID, limitPrice, refAsk, size: effectiveSize, filledSize, fillPrice, confidence, attempts: attemptsNext, exit: { soldFrac: 0, tp1Done: false, tp2Done: false, slDone: false }, addOn: { done: false } };
       }
       // prune old
       const keys = Object.keys(state.traded);
@@ -895,7 +906,7 @@ async function main(){
       try {
         const outPath = '/Users/jt/.openclaw/workspace/memory/polymarket-trades.jsonl';
         const px = (fillPrice && fillPrice > 0) ? fillPrice : refAsk;
-        fs.appendFileSync(outPath, JSON.stringify({ ts: new Date().toISOString(), series: 'btc-up-or-down-15m', event: cur.slug, action: 'BUY', outcome, tokenID, limitPrice, refAsk, fillPrice, size, estNotional: px*size, orderID: resp.orderID, status: resp.status, attempt: attemptTag }) + '\n');
+        fs.appendFileSync(outPath, JSON.stringify({ ts: new Date().toISOString(), series: 'btc-up-or-down-15m', event: cur.slug, action: 'BUY', outcome, tokenID, limitPrice, refAsk, fillPrice, size: effectiveSize, filledSize, estNotional: px*effectiveSize, orderID: resp.orderID, status: resp.status, attempt: attemptTag }) + '\n');
       } catch {}
 
       log.info({ slug: cur.slug, orderID: resp?.orderID, status: resp?.status }, 'BTC15_ORDER_SUBMITTED');
