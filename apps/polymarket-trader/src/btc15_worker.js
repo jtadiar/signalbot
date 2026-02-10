@@ -264,7 +264,8 @@ async function main(){
       const secondDue = (entryMode === 't5' && secondCheckMin > 0);
       const secondPending = secondDue && !attempts.second;
       const secondAtMs = (cur.endMs - 15*60*1000) + (secondCheckMin*60*1000);
-      const canStillSecond = secondPending && (secondCheckAlways || (!t?.orderID));
+      const isLiveUnfilled = (String(t?.status || '').toLowerCase() === 'live') && !(num(t?.filledSize) > 0);
+      const canStillSecond = secondPending && (secondCheckAlways || (!t?.orderID) || isLiveUnfilled);
 
       const recheckDue = (entryMode === 't5' && t5RecheckSec > 0);
       const recheckPending = recheckDue && !attempts.t5re;
@@ -793,11 +794,23 @@ async function main(){
       : (entryMode === 't10' ? 't10' : 'entry');
 
     // Per-attempt sizing:
-    // - T+5: default $10 only if criteria met, else $5
-    // - second tranche: fixed $5
+    // - T+5: default $7.5 only if criteria met, else $5
+    // - T+10 retry: only if confidence is high
     let attemptNotional = baseNotional;
     if (attemptTag === 'second') {
-      attemptNotional = secondNotional;
+      const retryConfMin = num(process.env.T10_RETRY_CONF_MIN || String(t5BigConf || 90));
+      const retryNotional = num(process.env.T10_RETRY_NOTIONAL_USDC || String(secondNotional || t5NotionalBig || 7.5));
+      if (confidence < retryConfMin) {
+        log.info({ slug: cur.slug, confidence, retryConfMin, note: 'SECOND_CHECK_SKIP_LOW_CONF' }, 'BTC15_SECOND_CHECK_SKIP');
+        // Mark the attempt so we don't keep retrying this window.
+        if (!state.traded[cur.slug]) state.traded[cur.slug] = { ts: new Date().toISOString(), attempts: {} };
+        state.traded[cur.slug].attempts = state.traded[cur.slug].attempts || {};
+        state.traded[cur.slug].attempts.second = true;
+        saveState(state);
+        await sleep(2000);
+        continue;
+      }
+      attemptNotional = retryNotional;
     } else if (attemptTag === 't5') {
       const bigOk = (
         (confidence >= t5BigConf) &&
@@ -827,6 +840,23 @@ async function main(){
       const negRisk = await Promise.race([client.getNegRisk(tokenID), sleep(4000).then(()=>{ throw new Error('negRisk timeout'); })]);
 
       log.info({ slug: cur.slug, outcome, tokenID, limitPrice, refAsk, size, estNotional: +(refAsk*size).toFixed(3) }, 'BTC15_ORDER_ATTEMPT');
+
+      // If this is the T+10 retry, cancel any prior live-unfilled T+5 order to free collateral.
+      if (attemptTag === 'second') {
+        const prev0 = state.traded?.[cur.slug];
+        const prevLiveUnfilled = prev0?.orderID && (String(prev0?.status || '').toLowerCase() === 'live') && !(num(prev0?.filledSize) > 0);
+        if (prevLiveUnfilled) {
+          try {
+            await Promise.race([
+              client.cancelOrder({ orderID: prev0.orderID }),
+              sleep(5000).then(()=>{ throw new Error('cancel timeout'); })
+            ]);
+            log.info({ slug: cur.slug, orderID: prev0.orderID }, 'BTC15_CANCELLED_UNFILLED_T5');
+          } catch (e) {
+            log.warn({ slug: cur.slug, orderID: prev0.orderID, err: String(e) }, 'BTC15_CANCEL_UNFILLED_T5_FAILED');
+          }
+        }
+      }
 
       const resp = await Promise.race([
         client.createAndPostOrder({ tokenID, side: Side.BUY, price: limitPrice, size }, { tickSize, negRisk }, OrderType.GTC),
