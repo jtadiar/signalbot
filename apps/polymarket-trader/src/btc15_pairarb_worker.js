@@ -317,7 +317,10 @@ async function main(){
 
     // Execute BUY at ask (simple, fill-seeking). Conservative order type: GTC.
     const tokenID = pick === 'Up' ? tokenIds[0] : tokenIds[1];
-    const size = Math.max(1, Math.floor(addQ * 100) / 100); // 2 decimals
+
+    // Enforce market minimum size (CLOB rejects too-small orders; observed min is 5 shares on BTC15).
+    const minSize = num(process.env.PAIRARB_MIN_SIZE || '5');
+    const size = Math.max(minSize, Math.floor(addQ * 100) / 100); // 2 decimals
 
     try {
       const tickSize = await Promise.race([client.getTickSize(tokenID), sleep(4000).then(()=>{ throw new Error('tickSize timeout'); })]);
