@@ -316,24 +316,35 @@ async function main(){
     }
 
     const ask = pick === 'Up' ? sUp.ask : sDown.ask;
+    const bid = pick === 'Up' ? sUp.bid : sDown.bid;
 
-    // General price cap.
-    if (ask > maxEntryPrice) {
-      log.info({ slug: cur.slug, pick, ask, maxEntryPrice, qU, qD, pairCost: pc || null }, 'PAIRARB_SKIP_PRICE');
+    // Maker bidding: we place post-only BUYs at (or below) best bid to avoid crossing spread.
+    // If there's no real bid, skip (don't pay the ask).
+    if (!(bid > 0 && bid < 1) || !(ask > 0 && ask < 1) || bid >= ask) {
+      log.debug({ slug: cur.slug, pick, bid, ask, note: 'BAD_BOOK_FOR_MAKER' }, 'PAIRARB_SKIP_BOOK');
       await sleep(pollMs);
       continue;
     }
 
-    // Seed gate: if we DON'T yet have both legs, only seed when ask is cheap enough.
-    if (!haveBoth && ask > seedMaxAsk) {
-      log.info({ slug: cur.slug, pick, ask, seedMaxAsk, haveUp, haveDown, note: 'SEED_TOO_EXPENSIVE' }, 'PAIRARB_SKIP_SEED');
+    const price = bid;
+
+    // General price cap (based on what we are willing to pay as maker).
+    if (price > maxEntryPrice) {
+      log.info({ slug: cur.slug, pick, price, maxEntryPrice, qU, qD, pairCost: pc || null }, 'PAIRARB_SKIP_PRICE');
+      await sleep(pollMs);
+      continue;
+    }
+
+    // Seed gate: if we DON'T yet have both legs, only seed when price is cheap enough.
+    if (!haveBoth && price > seedMaxAsk) {
+      log.info({ slug: cur.slug, pick, price, seedMaxAsk, haveUp, haveDown, note: 'SEED_TOO_EXPENSIVE' }, 'PAIRARB_SKIP_SEED');
       await sleep(pollMs);
       continue;
     }
 
     // Simulate if adding this slice improves pair cost meaningfully.
     const spend = Math.min(sliceNotional, Math.max(0, windowBudget - w.spent));
-    const addQ = spend / ask;
+    const addQ = spend / price;
 
     // New averages if we add to one side.
     const up2 = { q: qU, cost: num(w.up.cost) };
@@ -349,7 +360,7 @@ async function main(){
     if (haveBoth) {
       const ok = (pc2 > 0) && (pc === 0 || pc2 <= targetPairCost || pc2 < (pc - minImprovement));
       if (!ok) {
-        log.debug({ slug: cur.slug, pick, pc, pc2, minImprovement, targetPairCost, avgU: avgPrice(w.up), avgD: avgPrice(w.down), ask, spend }, 'PAIRARB_SKIP_NO_IMPROVEMENT');
+        log.debug({ slug: cur.slug, pick, pc, pc2, minImprovement, targetPairCost, avgU: avgPrice(w.up), avgD: avgPrice(w.down), price, bid, ask, spend }, 'PAIRARB_SKIP_NO_IMPROVEMENT');
         await sleep(pollMs);
         continue;
       }
@@ -366,10 +377,10 @@ async function main(){
       const tickSize = await Promise.race([client.getTickSize(tokenID), sleep(4000).then(()=>{ throw new Error('tickSize timeout'); })]);
       const negRisk = await Promise.race([client.getNegRisk(tokenID), sleep(4000).then(()=>{ throw new Error('negRisk timeout'); })]);
 
-      log.info({ slug: cur.slug, pick, outcome: pick, tokenID, price: ask, size, spend: +(ask*size).toFixed(3), pc, pc2, targetPairCost }, 'PAIRARB_ORDER_ATTEMPT');
+      log.info({ slug: cur.slug, pick, outcome: pick, tokenID, price, bid, ask, postOnly: true, size, spendMax: +spend.toFixed(3), estNotional: +(price*size).toFixed(3), pc, pc2, targetPairCost }, 'PAIRARB_ORDER_ATTEMPT');
 
       const resp = await Promise.race([
-        client.createAndPostOrder({ tokenID, side: Side.BUY, price: ask, size }, { tickSize, negRisk }, OrderType.GTC),
+        client.createAndPostOrder({ tokenID, side: Side.BUY, price, size }, { tickSize, negRisk }, OrderType.GTC, false, true),
         sleep(10000).then(()=>{ throw new Error('postOrder timeout'); })
       ]);
 
@@ -383,7 +394,7 @@ async function main(){
       // Best-effort: treat matched/live as executed; update cost/qty by intended amounts.
       // NOTE: for production we should reconcile fills; keep this worker conservative with small slices.
       const filledQ = size;
-      const filledCost = ask * filledQ;
+      const filledCost = price * filledQ;
 
       if (pick === 'Up') { w.up.q += filledQ; w.up.cost += filledCost; }
       else { w.down.q += filledQ; w.down.cost += filledCost; }
@@ -392,7 +403,7 @@ async function main(){
 
       // Append to shared trades log so pinger can alert.
       try {
-        fs.appendFileSync('/Users/jt/.openclaw/workspace/memory/polymarket-trades.jsonl', JSON.stringify({ ts: new Date().toISOString(), series: 'btc-up-or-down-15m', event: cur.slug, action: 'BUY_PAIRARB', outcome: pick, tokenID, price: ask, size: filledQ, estNotional: filledCost, orderID: resp.orderID, status: resp.status }) + '\n');
+        fs.appendFileSync('/Users/jt/.openclaw/workspace/memory/polymarket-trades.jsonl', JSON.stringify({ ts: new Date().toISOString(), series: 'btc-up-or-down-15m', event: cur.slug, action: 'BUY_PAIRARB', outcome: pick, tokenID, price, bid, ask, postOnly: true, size: filledQ, estNotional: filledCost, orderID: resp.orderID, status: resp.status }) + '\n');
       } catch {}
 
       saveState(state);
