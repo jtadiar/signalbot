@@ -161,7 +161,8 @@ async function main(){
   const maxRelSpread = num(process.env.PAIRARB_MAX_REL_SPREAD || '0.10');
   const minTopDepthUsdc = num(process.env.PAIRARB_MIN_TOP_DEPTH_USDC || '150');
 
-  // Only trade until close-guard.
+  // Timing gates
+  const startAfterMin = num(process.env.PAIRARB_START_AFTER_MIN || '5'); // minutes after window start
   const latestToEndSec = num(process.env.PAIRARB_LATEST_ENTRY_TO_END_SEC || '120');
   const pollMs = num(process.env.PAIRARB_POLL_MS || '4000');
 
@@ -219,7 +220,16 @@ async function main(){
     const cur = ev.find(e=> now < e.endMs);
     if (!cur) { await sleep(5000); continue; }
 
+    const startMs = cur.endMs - 15*60*1000;
     const msLeft = cur.endMs - now;
+
+    // Don't start too early in the window (avoid reset noise / thin books).
+    if (startAfterMin > 0 && now < (startMs + startAfterMin*60*1000)) {
+      await sleep(Math.min(5000, pollMs));
+      continue;
+    }
+
+    // Don't initiate new entries too close to window end.
     if (msLeft < latestToEndSec*1000) {
       await sleep(Math.min(5000, pollMs));
       continue;
