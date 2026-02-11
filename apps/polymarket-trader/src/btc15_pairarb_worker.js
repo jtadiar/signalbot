@@ -155,8 +155,11 @@ async function main(){
   const maxEntryPrice = num(process.env.PAIRARB_MAX_ENTRY_PRICE || process.env.MAX_ENTRY_PRICE || '0.78');
 
   // Pair-arb controls
-  // - We only "seed" a first leg when ask is genuinely cheap (prevents digging a hole)
-  // - After we have both legs, only trade if pairCost improves by a minimum step
+  // - We quote BOTH sides with post-only bids.
+  // - Only engage when book implies a potential arb (bidUp + bidDown below a threshold).
+  const requireBidSumBelow = num(process.env.PAIRARB_REQUIRE_BID_SUM_BELOW || '0.99');
+
+  // Back-compat knobs (still used for some safety constraints)
   const seedMaxAsk = num(process.env.PAIRARB_SEED_MAX_ASK || '0.45');
   const minImprovement = num(process.env.PAIRARB_MIN_IMPROVEMENT || '0.002');
   const maxOverhangShares = num(process.env.PAIRARB_MAX_OVERHANG_SHARES || '5');
@@ -291,93 +294,74 @@ async function main(){
     if (sUp.relSpread > maxRelSpread || sDown.relSpread > maxRelSpread) { await sleep(pollMs); continue; }
     if (sUp.askNotional < minTopDepthUsdc || sDown.askNotional < minTopDepthUsdc) { await sleep(pollMs); continue; }
 
-    // Decide which side to add.
-    // Rules:
-    // - Avoid building a huge unhedged overhang.
-    // - Seed first leg only when it's genuinely cheap.
-    // - Once both legs exist, only trade if it improves pairCost by minImprovement.
+    // Quote BOTH sides with post-only bids.
+    // Engagement gate: only quote when bidUp + bidDown is below threshold (arb-like setup).
+    const bidUp = num(sUp.bid);
+    const askUp = num(sUp.ask);
+    const bidDown = num(sDown.bid);
+    const askDown = num(sDown.ask);
+
+    const bidSum = (bidUp > 0 && bidDown > 0) ? (bidUp + bidDown) : 0;
+    if (!(bidSum > 0) || bidSum > requireBidSumBelow) {
+      log.debug({ slug: cur.slug, bidUp, bidDown, bidSum, requireBidSumBelow }, 'PAIRARB_SKIP_NO_ARB');
+      await sleep(pollMs);
+      continue;
+    }
+
+    // Book sanity for maker bids.
+    if (!(bidUp > 0 && askUp > 0 && bidUp < askUp) || !(bidDown > 0 && askDown > 0 && bidDown < askDown)) {
+      log.debug({ slug: cur.slug, bidUp, askUp, bidDown, askDown }, 'PAIRARB_SKIP_BOOK');
+      await sleep(pollMs);
+      continue;
+    }
+
+    // General price cap (for maker price).
+    if (bidUp > maxEntryPrice || bidDown > maxEntryPrice) {
+      log.debug({ slug: cur.slug, bidUp, bidDown, maxEntryPrice }, 'PAIRARB_SKIP_PRICE');
+      await sleep(pollMs);
+      continue;
+    }
+
+    // Seed gate: before we have both legs, only quote if both sides are reasonably cheap.
     const qU = num(w.up.q);
     const qD = num(w.down.q);
-    const haveUp = qU > 0;
-    const haveDown = qD > 0;
-    const haveBoth = haveUp && haveDown;
-
-    // Overhang guard: if one side leads by too many shares, only consider buying the other.
-    const overhang = qU - qD; // + means Up heavy
-
-    let pick;
-    if (Math.abs(overhang) >= maxOverhangShares && maxOverhangShares > 0) {
-      pick = overhang > 0 ? 'Down' : 'Up';
-    } else {
-      // Default: buy the underweight side; if balanced, buy the cheaper ask.
-      if (qU > qD + 1e-9) pick = 'Down';
-      else if (qD > qU + 1e-9) pick = 'Up';
-      else pick = (sDown.ask < sUp.ask) ? 'Down' : 'Up';
-    }
-
-    const ask = pick === 'Up' ? sUp.ask : sDown.ask;
-    const bid = pick === 'Up' ? sUp.bid : sDown.bid;
-
-    // Maker bidding: we place post-only BUYs at (or below) best bid to avoid crossing spread.
-    // If there's no real bid, skip (don't pay the ask).
-    if (!(bid > 0 && bid < 1) || !(ask > 0 && ask < 1) || bid >= ask) {
-      log.debug({ slug: cur.slug, pick, bid, ask, note: 'BAD_BOOK_FOR_MAKER' }, 'PAIRARB_SKIP_BOOK');
+    const haveBoth = (qU > 0) && (qD > 0);
+    if (!haveBoth && (bidUp > seedMaxAsk || bidDown > seedMaxAsk)) {
+      log.debug({ slug: cur.slug, bidUp, bidDown, seedMaxAsk }, 'PAIRARB_SKIP_SEED');
       await sleep(pollMs);
       continue;
     }
 
-    const price = bid;
-
-    // General price cap (based on what we are willing to pay as maker).
-    if (price > maxEntryPrice) {
-      log.info({ slug: cur.slug, pick, price, maxEntryPrice, qU, qD, pairCost: pc || null }, 'PAIRARB_SKIP_PRICE');
-      await sleep(pollMs);
-      continue;
-    }
-
-    // Seed gate: if we DON'T yet have both legs, only seed when price is cheap enough.
-    if (!haveBoth && price > seedMaxAsk) {
-      log.info({ slug: cur.slug, pick, price, seedMaxAsk, haveUp, haveDown, note: 'SEED_TOO_EXPENSIVE' }, 'PAIRARB_SKIP_SEED');
-      await sleep(pollMs);
-      continue;
-    }
-
-    // Simulate if adding this slice improves pair cost meaningfully.
-    const spend = Math.min(sliceNotional, Math.max(0, windowBudget - w.spent));
-    const addQ = spend / price;
-
-    // New averages if we add to one side.
-    const up2 = { q: qU, cost: num(w.up.cost) };
-    const dn2 = { q: qD, cost: num(w.down.cost) };
-    if (pick === 'Up') { up2.q += addQ; up2.cost += spend; }
-    else { dn2.q += addQ; dn2.cost += spend; }
-
-    const avgU2 = avgPrice(up2);
-    const avgD2 = avgPrice(dn2);
-    const pc2 = (avgU2 > 0 && avgD2 > 0) ? (avgU2 + avgD2) : 0;
-
-    // Improvement gate: once both legs exist, only trade when it improves pairCost.
-    if (haveBoth) {
-      const ok = (pc2 > 0) && (pc === 0 || pc2 <= targetPairCost || pc2 < (pc - minImprovement));
-      if (!ok) {
-        log.debug({ slug: cur.slug, pick, pc, pc2, minImprovement, targetPairCost, avgU: avgPrice(w.up), avgD: avgPrice(w.down), price, bid, ask, spend }, 'PAIRARB_SKIP_NO_IMPROVEMENT');
-        await sleep(pollMs);
-        continue;
+    // Cancel prior live quotes for this window to refresh prices.
+    if (Array.isArray(w.liveOrderIDs) && w.liveOrderIDs.length) {
+      for (const oid of w.liveOrderIDs.slice(0, 10)) {
+        try { await client.cancelOrder({ orderID: oid }); } catch {}
       }
+      w.liveOrderIDs = [];
+      saveState(state);
     }
 
-    // Execute BUY at ask (simple, fill-seeking). Conservative order type: GTC.
-    const tokenID = pick === 'Up' ? tokenIds[0] : tokenIds[1];
+    // Budget allocation: split remaining budget across both sides.
+    const remaining = Math.max(0, windowBudget - num(w.spent));
+    if (remaining <= 0.01) {
+      log.warn({ slug: cur.slug, spent: +w.spent.toFixed(2), windowBudget }, 'PAIRARB_BUDGET_REACHED');
+      await sleep(pollMs);
+      continue;
+    }
+
+    const perSideSpend = Math.min(sliceNotional, remaining / 2);
 
     // Enforce market minimum size (CLOB rejects too-small orders; observed min is 5 shares on BTC15).
     const minSize = num(process.env.PAIRARB_MIN_SIZE || '5');
-    const size = Math.max(minSize, Math.floor(addQ * 100) / 100); // 2 decimals
 
-    try {
+    async function quoteSide(sideName, tokenID, price, bid, ask) {
+      const addQ = perSideSpend / price;
+      const size = Math.max(minSize, Math.floor(addQ * 100) / 100);
+
       const tickSize = await Promise.race([client.getTickSize(tokenID), sleep(4000).then(()=>{ throw new Error('tickSize timeout'); })]);
       const negRisk = await Promise.race([client.getNegRisk(tokenID), sleep(4000).then(()=>{ throw new Error('negRisk timeout'); })]);
 
-      log.info({ slug: cur.slug, pick, outcome: pick, tokenID, price, bid, ask, postOnly: true, size, spendMax: +spend.toFixed(3), estNotional: +(price*size).toFixed(3), pc, pc2, targetPairCost }, 'PAIRARB_ORDER_ATTEMPT');
+      log.info({ slug: cur.slug, side: sideName, tokenID, price, bid, ask, postOnly: true, size, perSideSpend: +perSideSpend.toFixed(3), bidSum, requireBidSumBelow }, 'PAIRARB_QUOTE');
 
       const resp = await Promise.race([
         client.createAndPostOrder({ tokenID, side: Side.BUY, price, size }, { tickSize, negRisk }, OrderType.GTC, false, true),
@@ -386,31 +370,35 @@ async function main(){
 
       const st = String(resp?.status || '').toLowerCase();
       if (!resp?.orderID || !(st === 'matched' || st === 'live')) {
-        log.warn({ slug: cur.slug, resp }, 'PAIRARB_ORDER_REJECTED');
-        await sleep(pollMs);
-        continue;
+        log.warn({ slug: cur.slug, side: sideName, resp }, 'PAIRARB_ORDER_REJECTED');
+        return;
       }
 
-      // Best-effort: treat matched/live as executed; update cost/qty by intended amounts.
-      // NOTE: for production we should reconcile fills; keep this worker conservative with small slices.
-      const filledQ = size;
-      const filledCost = price * filledQ;
+      if (st === 'matched') {
+        const filledQ = size;
+        const filledCost = price * filledQ;
+        if (sideName === 'Up') { w.up.q += filledQ; w.up.cost += filledCost; }
+        else { w.down.q += filledQ; w.down.cost += filledCost; }
+        w.spent += filledCost;
 
-      if (pick === 'Up') { w.up.q += filledQ; w.up.cost += filledCost; }
-      else { w.down.q += filledQ; w.down.cost += filledCost; }
-      w.spent += filledCost;
-      w.orders.push({ ts: new Date().toISOString(), pick, tokenID, price: ask, size: filledQ, orderID: resp.orderID, status: resp.status });
+        try {
+          fs.appendFileSync('/Users/jt/.openclaw/workspace/memory/polymarket-trades.jsonl', JSON.stringify({ ts: new Date().toISOString(), series: 'btc-up-or-down-15m', event: cur.slug, action: 'BUY_PAIRARB', outcome: sideName, tokenID, price, bid, ask, postOnly: true, size: filledQ, estNotional: filledCost, orderID: resp.orderID, status: resp.status }) + '\n');
+        } catch {}
+      } else {
+        // Live quote: track so we can cancel/refresh next loop.
+        if (!Array.isArray(w.liveOrderIDs)) w.liveOrderIDs = [];
+        w.liveOrderIDs.push(resp.orderID);
+      }
+    }
 
-      // Append to shared trades log so pinger can alert.
-      try {
-        fs.appendFileSync('/Users/jt/.openclaw/workspace/memory/polymarket-trades.jsonl', JSON.stringify({ ts: new Date().toISOString(), series: 'btc-up-or-down-15m', event: cur.slug, action: 'BUY_PAIRARB', outcome: pick, tokenID, price, bid, ask, postOnly: true, size: filledQ, estNotional: filledCost, orderID: resp.orderID, status: resp.status }) + '\n');
-      } catch {}
+    try {
+      await quoteSide('Up', tokenIds[0], bidUp, bidUp, askUp);
+      await quoteSide('Down', tokenIds[1], bidDown, bidDown, askDown);
 
       saveState(state);
-      log.info({ slug: cur.slug, spent: +w.spent.toFixed(2), windowBudget, avgUp: +avgPrice(w.up).toFixed(4), avgDown: +avgPrice(w.down).toFixed(4), pairCost: +(pairCost(w)||0).toFixed(4), lockedProfitEst: +lockedProfitEstimate(w).toFixed(3) }, 'PAIRARB_STATE');
-
+      log.info({ slug: cur.slug, spent: +w.spent.toFixed(2), windowBudget, avgUp: +avgPrice(w.up).toFixed(4), avgDown: +avgPrice(w.down).toFixed(4), pairCost: +(pairCost(w)||0).toFixed(4), lockedProfitEst: +lockedProfitEstimate(w).toFixed(3), liveOrders: (w.liveOrderIDs||[]).length }, 'PAIRARB_STATE');
     } catch (e) {
-      log.warn({ slug: cur.slug, err: String(e) }, 'PAIRARB_ORDER_FAILED');
+      log.warn({ slug: cur.slug, err: String(e) }, 'PAIRARB_QUOTE_FAILED');
     }
 
     await sleep(pollMs);
