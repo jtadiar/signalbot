@@ -154,6 +154,13 @@ async function main(){
   const sliceNotional = num(process.env.PAIRARB_SLICE_USDC || '2.5');
   const maxEntryPrice = num(process.env.PAIRARB_MAX_ENTRY_PRICE || process.env.MAX_ENTRY_PRICE || '0.78');
 
+  // Pair-arb controls
+  // - We only "seed" a first leg when ask is genuinely cheap (prevents digging a hole)
+  // - After we have both legs, only trade if pairCost improves by a minimum step
+  const seedMaxAsk = num(process.env.PAIRARB_SEED_MAX_ASK || '0.45');
+  const minImprovement = num(process.env.PAIRARB_MIN_IMPROVEMENT || '0.002');
+  const maxOverhangShares = num(process.env.PAIRARB_MAX_OVERHANG_SHARES || '5');
+
   // Safety buffer below 1.00 to account for fees/slippage.
   const targetPairCost = num(process.env.PAIRARB_TARGET_PAIR_COST || '0.985');
 
@@ -284,19 +291,42 @@ async function main(){
     if (sUp.relSpread > maxRelSpread || sDown.relSpread > maxRelSpread) { await sleep(pollMs); continue; }
     if (sUp.askNotional < minTopDepthUsdc || sDown.askNotional < minTopDepthUsdc) { await sleep(pollMs); continue; }
 
-    // Decide which side to add: we prefer the side that is more "underweight" in shares.
-    // If shares are balanced, buy the cheaper ask.
+    // Decide which side to add.
+    // Rules:
+    // - Avoid building a huge unhedged overhang.
+    // - Seed first leg only when it's genuinely cheap.
+    // - Once both legs exist, only trade if it improves pairCost by minImprovement.
     const qU = num(w.up.q);
     const qD = num(w.down.q);
+    const haveUp = qU > 0;
+    const haveDown = qD > 0;
+    const haveBoth = haveUp && haveDown;
 
-    let pick = 'Up';
-    if (qU > qD + 1e-9) pick = 'Down';
-    else if (qD > qU + 1e-9) pick = 'Up';
-    else pick = (sDown.ask < sUp.ask) ? 'Down' : 'Up';
+    // Overhang guard: if one side leads by too many shares, only consider buying the other.
+    const overhang = qU - qD; // + means Up heavy
+
+    let pick;
+    if (Math.abs(overhang) >= maxOverhangShares && maxOverhangShares > 0) {
+      pick = overhang > 0 ? 'Down' : 'Up';
+    } else {
+      // Default: buy the underweight side; if balanced, buy the cheaper ask.
+      if (qU > qD + 1e-9) pick = 'Down';
+      else if (qD > qU + 1e-9) pick = 'Up';
+      else pick = (sDown.ask < sUp.ask) ? 'Down' : 'Up';
+    }
 
     const ask = pick === 'Up' ? sUp.ask : sDown.ask;
+
+    // General price cap.
     if (ask > maxEntryPrice) {
       log.info({ slug: cur.slug, pick, ask, maxEntryPrice, qU, qD, pairCost: pc || null }, 'PAIRARB_SKIP_PRICE');
+      await sleep(pollMs);
+      continue;
+    }
+
+    // Seed gate: if we DON'T yet have both legs, only seed when ask is cheap enough.
+    if (!haveBoth && ask > seedMaxAsk) {
+      log.info({ slug: cur.slug, pick, ask, seedMaxAsk, haveUp, haveDown, note: 'SEED_TOO_EXPENSIVE' }, 'PAIRARB_SKIP_SEED');
       await sleep(pollMs);
       continue;
     }
@@ -315,14 +345,14 @@ async function main(){
     const avgD2 = avgPrice(dn2);
     const pc2 = (avgU2 > 0 && avgD2 > 0) ? (avgU2 + avgD2) : 0;
 
-    // If we don't have both legs yet, allow first leg without pc2 gate.
-    const haveBoth = (qU > 0 && qD > 0);
-    const improves = haveBoth ? (pc2 > 0 && (pc === 0 || pc2 < pc - 0.002)) : true;
-
-    if (!improves) {
-      log.debug({ slug: cur.slug, pick, pc, pc2, avgU: avgPrice(w.up), avgD: avgPrice(w.down), ask, spend }, 'PAIRARB_SKIP_NO_IMPROVEMENT');
-      await sleep(pollMs);
-      continue;
+    // Improvement gate: once both legs exist, only trade when it improves pairCost.
+    if (haveBoth) {
+      const ok = (pc2 > 0) && (pc === 0 || pc2 <= targetPairCost || pc2 < (pc - minImprovement));
+      if (!ok) {
+        log.debug({ slug: cur.slug, pick, pc, pc2, minImprovement, targetPairCost, avgU: avgPrice(w.up), avgD: avgPrice(w.down), ask, spend }, 'PAIRARB_SKIP_NO_IMPROVEMENT');
+        await sleep(pollMs);
+        continue;
+      }
     }
 
     // Execute BUY at ask (simple, fill-seeking). Conservative order type: GTC.
