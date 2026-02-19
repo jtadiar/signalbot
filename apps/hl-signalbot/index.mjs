@@ -336,17 +336,19 @@ async function manageOpenPosition(pos){
     const posKey = `${side}:${Number(state.entryPx||0).toFixed(2)}:${Number(state.initialSz||absSz).toFixed(5)}:${Number(state.stopPct||0).toFixed(6)}`;
     if (state.exitsPlacedForPosKey === posKey) return { ok: true, posKey, wantCount: 0, okCount: 0 };
 
-    // If a stop already exists, we treat it as manually managed and we won't cancel/replace it.
+    // If SL/TP already exist, treat them as manually managed and do not cancel/replace.
     let hasExistingStop = false;
+    let hasExistingTp = false;
     try {
       const oo = await sdk.info.getFrontendOpenOrders(cfg.wallet.address, true);
       const coinPerp = `${cfg.market.coin}-PERP`;
       hasExistingStop = (oo||[]).some(o => (o.coin===cfg.market.coin || o.coin===coinPerp) && o.reduceOnly===true && String(o.orderType||'').toLowerCase().includes('stop'));
+      hasExistingTp = (oo||[]).some(o => (o.coin===cfg.market.coin || o.coin===coinPerp) && o.reduceOnly===true && (String(o.orderType||'').toLowerCase().includes('take profit') || o.tpsl === 'tp'));
     } catch {}
 
-    // Clear existing TP triggers first so we don't stack duplicates.
-    // Only cancel the SL if there isn't an existing stop (i.e., we own SL placement for this position).
-    await cancelAllBtcOrders({ cancelStops: !hasExistingStop, cancelTps: true }).catch(()=>{});
+    // Clear existing triggers we own so we don't stack duplicates.
+    // Respect manual exits: if there is an existing stop or TP, leave it alone.
+    await cancelAllBtcOrders({ cancelStops: !hasExistingStop, cancelTps: !hasExistingTp }).catch(()=>{});
 
     // NOTE: For perp orders the SDK expects the perp symbol (e.g. 'BTC-PERP').
     const makeTrigger = async ({ isBuy, sz, triggerPx, tpsl }) => {
@@ -387,29 +389,32 @@ async function manageOpenPosition(pos){
     }
 
     // TPs: partial reduce-only triggers
-    for (let i = 0; i < tpPlan.length; i++){
-      const t = tpPlan[i] || {};
-      const r = Number(t.rMultiple || 0);
-      const frac = Number(t.closeFrac || 0);
-      if (!(r > 0) || !(frac > 0)) continue;
+    // Respect manual TP placement: if TPs already exist, don't add more.
+    if (!hasExistingTp){
+      for (let i = 0; i < tpPlan.length; i++){
+        const t = tpPlan[i] || {};
+        const r = Number(t.rMultiple || 0);
+        const frac = Number(t.closeFrac || 0);
+        if (!(r > 0) || !(frac > 0)) continue;
 
-      const tpPx = side === 'long'
-        ? (state.entryPx * (1 + r * stopPct))
-        : (state.entryPx * (1 - r * stopPct));
+        const tpPx = side === 'long'
+          ? (state.entryPx * (1 + r * stopPct))
+          : (state.entryPx * (1 - r * stopPct));
 
-      const tpSz = Math.min(absSz, Number(state.initialSz || absSz) * frac);
-      if (tpPx > 0 && tpSz > 0){
-        wantCount += 1;
-        try {
-          await makeTrigger({
-            isBuy: side === 'short',
-            sz: tpSz,
-            triggerPx: tpPx,
-            tpsl: 'tp',
-          });
-          okCount += 1;
-        } catch (e){
-          errors.push({ kind: `tp${i+1}`, msg: e?.message || String(e) });
+        const tpSz = Math.min(absSz, Number(state.initialSz || absSz) * frac);
+        if (tpPx > 0 && tpSz > 0){
+          wantCount += 1;
+          try {
+            await makeTrigger({
+              isBuy: side === 'short',
+              sz: tpSz,
+              triggerPx: tpPx,
+              tpsl: 'tp',
+            });
+            okCount += 1;
+          } catch (e){
+            errors.push({ kind: `tp${i+1}`, msg: e?.message || String(e) });
+          }
         }
       }
     }
@@ -423,21 +428,21 @@ async function manageOpenPosition(pos){
         if (active.length >= wantCount) {
           state.exitsPlacedForPosKey = posKey;
           persistState();
-          return { ok: true, posKey, wantCount, okCount, hasExistingStop };
+          return { ok: true, posKey, wantCount, okCount, hasExistingStop, hasExistingTp };
         }
         console.error(nowIso(), 'TP/SL placement verify failed', { wantCount, found: active.length });
-        return { ok: false, posKey, wantCount, okCount, hasExistingStop, errors: [{ kind: 'verify', msg: `found ${active.length}` }] };
+        return { ok: false, posKey, wantCount, okCount, hasExistingStop, hasExistingTp, errors: [{ kind: 'verify', msg: `found ${active.length}` }] };
       } catch {
         // If verify fails, still mark as placed to avoid spamming, since calls succeeded.
         state.exitsPlacedForPosKey = posKey;
         persistState();
-        return { ok: true, posKey, wantCount, okCount, hasExistingStop, verified: false };
+        return { ok: true, posKey, wantCount, okCount, hasExistingStop, hasExistingTp, verified: false };
       }
     }
 
     // Don't mark as placed; we want to retry next loop.
     console.error(nowIso(), 'TP/SL placement incomplete', { okCount, wantCount, errors });
-    return { ok: false, posKey, wantCount, okCount, hasExistingStop, errors };
+    return { ok: false, posKey, wantCount, okCount, hasExistingStop, hasExistingTp, errors };
   }
 
   const tpslStatus = await ensureNativeTpsl();
@@ -770,4 +775,19 @@ function onLoopError(e){
 }
 
 console.log(nowIso(), 'HL signalbot starting', { wallet: cfg.wallet.address, coin: cfg.market.coin, pollMs: cfg.signal.pollMs });
-setInterval(()=>{ mainLoop().then(()=>{ state.errStreak = 0; persistState(); }).catch(onLoopError); }, cfg.signal.pollMs);
+
+// Prevent overlapping loops (can cause duplicate entries and duplicate TP/SL placement)
+let loopInFlight = false;
+setInterval(async ()=>{
+  if (loopInFlight) return;
+  loopInFlight = true;
+  try {
+    await mainLoop();
+    state.errStreak = 0;
+    persistState();
+  } catch (e){
+    onLoopError(e);
+  } finally {
+    loopInFlight = false;
+  }
+}, cfg.signal.pollMs);
