@@ -148,9 +148,11 @@ All fields in `config.json` / `config.example.json`:
 | `stopLossPct` | `0.10` | Hard stop-loss cap as fraction of entry |
 | `maxMarginLossPct` | `0.03` | Max loss as fraction of margin used |
 | `trailToBreakevenOnTp1` | `true` | Move stop to breakeven after TP1 hit |
-| `tp` | 3-level ladder | Array of `{rMultiple, closeFrac}` objects |
-| `tpMinUsd` | `[10, 25, 60]` | Minimum USD profit per TP level |
-| `runnerCloseFrac` | `0.25` | Fraction of position for runner exit |
+| `trailStopToTp1OnTp2` | `true` | After TP2 hit, move stop to the TP1 price (locks profit on the runner) |
+| `trailingAfterTp2` | enabled | After TP2, start trailing the stop for the remaining runner |
+| `tp` | 2-level ladder | Array of `{rMultiple, closeFrac}` objects (e.g. TP1 closes 25%, TP2 closes 25%, leaving ~50% runner) |
+| `tpMinUsd` | `[10, 25, 60]` | Minimum USD profit per TP level (extra entries are ignored if you only have 2 TPs) |
+| `runnerCloseFrac` | `0.25` | Fraction of position for runner exit (if using runner exit mode) |
 | `runnerExit` | `"signal"` | Exit method for remaining position (`"signal"` or `null`) |
 
 ### `display`
