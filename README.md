@@ -29,7 +29,7 @@ The signal engine uses two timeframes and three indicators:
 - **Take-profit ladder:** Two R-multiple targets (default **2R** and **4R**), each closing **25%** of the original position, leaving ~**50% runner**.
 - **Stop movement after TP1:** After TP1 is hit, the stop-loss moves to **breakeven** (entry price).
 - **Stop movement after TP2:** After TP2 is hit, the stop-loss moves to the **TP1 price** (locks in profit on the runner).
-- **Trailing stop (runner):** After TP2, the bot can trail the stop for the remaining runner by a configurable percentage.
+- **Trailing stop (runner):** After TP2, the bot can trail the stop for the remaining runner by a configurable percentage (default: **0.50%**, `trailPct: 0.005`).
 - **Stop-loss:** ATR-sized, placed as a native Hyperliquid trigger order.
 - **Runner exit (optional):** Can also close the remaining runner on an opposite signal.
 
@@ -154,8 +154,7 @@ All fields in `config.json` / `config.example.json`:
 | `trailingAfterTp2` | enabled | After TP2, start trailing the stop for the remaining runner |
 | `tp` | 2-level ladder | Array of `{rMultiple, closeFrac}` objects (e.g. TP1 closes 25%, TP2 closes 25%, leaving ~50% runner) |
 | `tpMinUsd` | `[10, 25, 60]` | Minimum USD profit per TP level (extra entries are ignored if you only have 2 TPs) |
-| `runnerCloseFrac` | `0.25` | Fraction of position for runner exit (if using runner exit mode) |
-| `runnerExit` | `"signal"` | Exit method for remaining position (`"signal"` or `null`) |
+| `runnerExit` | `"signal"` | Optional runner exit: close remaining position when an opposite signal prints (`"signal"` or `null`) |
 
 #### Trailing stop tuning (how to tighten / loosen)
 

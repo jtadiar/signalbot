@@ -244,6 +244,34 @@ const maxDailyLoss = Number(maxDailyLossInput) || 200;
 const coinInput = (await ask(`  Trading coin [BTC]: `)).trim().toUpperCase();
 const coin = coinInput || 'BTC';
 
+console.log('');
+console.log(bold('  Runner / trailing stop settings'));
+console.log(dim('  ─────────────────────────────'));
+console.log('');
+console.log('  Default behavior:');
+console.log(dim('    • TP1 closes 25% at 2R, then SL → breakeven'));
+console.log(dim('    • TP2 closes 25% at 4R, then SL → TP1'));
+console.log(dim('    • Remaining ~50% is a runner with trailing stop after TP2'));
+console.log('');
+
+const trailAfterTp2Input = (await ask(`  Enable trailing stop after TP2? [Y/n]: `)).trim().toLowerCase();
+const trailAfterTp2Enabled = !(trailAfterTp2Input === 'n' || trailAfterTp2Input === 'no');
+
+let trailPreset = '2';
+if (trailAfterTp2Enabled){
+  console.log('');
+  console.log('  Choose trailing tightness (BTC):');
+  console.log('    [1] Tight   — 0.25% (may stop out on bounces)');
+  console.log('    [2] Medium  — 0.50% (default)');
+  console.log('    [3] Loose   — 0.80% (more room, more giveback)');
+  trailPreset = (await ask(`  Select [1/2/3] (default 2): `)).trim() || '2';
+}
+
+const trailPct = (trailPreset === '1') ? 0.0025 : (trailPreset === '3') ? 0.008 : 0.005;
+
+const moveStopToTp1Input = (await ask(`  After TP2, move stop to TP1 price? [Y/n]: `)).trim().toLowerCase();
+const moveStopToTp1 = !(moveStopToTp1Input === 'n' || moveStopToTp1Input === 'no');
+
 // ═════════════════════════════════════════════════════════════════════════════
 // STEP 6: Write config files
 // ═════════════════════════════════════════════════════════════════════════════
@@ -275,6 +303,16 @@ cfgObj.wallet.address = walletAddress;
 cfgObj.market.coin = coin;
 cfgObj.risk.maxLeverage = maxLev;
 cfgObj.risk.maxDailyLossUsd = maxDailyLoss;
+
+// Apply trailing/runner options chosen in the wizard
+cfgObj.exits = cfgObj.exits || {};
+cfgObj.exits.trailStopToTp1OnTp2 = moveStopToTp1;
+cfgObj.exits.trailingAfterTp2 = {
+  enabled: trailAfterTp2Enabled,
+  kind: 'pct',
+  trailPct,
+  minUpdateSeconds: 20,
+};
 
 if (wantTg === 'y' || wantTg === 'yes') {
   cfgObj.telegram.enabled = true;

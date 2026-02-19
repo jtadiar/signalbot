@@ -44,7 +44,6 @@
 
     "tpMinUsd": [10, 25, 60],
 
-    "runnerCloseFrac": 0.25,
     "runnerExit": "signal"
   },
   "execution": {
