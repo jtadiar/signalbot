@@ -1,4 +1,3 @@
-use serde::Serialize;
 use std::sync::Mutex;
 use tauri::{Manager, State};
 
