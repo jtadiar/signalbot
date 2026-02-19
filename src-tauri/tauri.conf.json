@@ -39,7 +39,18 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "resources": {
+      "../bot/cli.mjs": "bot/cli.mjs",
+      "../bot/index.mjs": "bot/index.mjs",
+      "../bot/signal_engine.mjs": "bot/signal_engine.mjs",
+      "../bot/hl_info.mjs": "bot/hl_info.mjs",
+      "../bot/setup.mjs": "bot/setup.mjs",
+      "../bot/config.example.json": "bot/config.example.json",
+      "../bot/.env.example": "bot/.env.example",
+      "../bot/package.json": "bot/package.json",
+      "../bot/package-lock.json": "bot/package-lock.json"
+    }
   },
   "plugins": {
     "shell": {

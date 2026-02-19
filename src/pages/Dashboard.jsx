@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { startBot, stopBot, onBotEvent, isBotRunning } from '../lib/bot';
 
 export default function Dashboard() {
@@ -9,6 +10,8 @@ export default function Dashboard() {
   const [dailyPnl, setDailyPnl] = useState(null);
   const [lastError, setLastError] = useState(null);
   const [logs, setLogs] = useState([]);
+  const [starting, setStarting] = useState(false);
+  const [healthSecs, setHealthSecs] = useState(null);
 
   // Sync with actual bot state on mount
   useEffect(() => {
@@ -19,6 +22,22 @@ export default function Dashboard() {
       }
     });
   }, []);
+
+  // Poll health every 5 seconds
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const [isRunning, secs, lastErr] = await invoke('get_health');
+        setRunning(isRunning);
+        if (isRunning) {
+          setStatus('running');
+          setHealthSecs(secs ?? null);
+        }
+        if (lastErr && !lastError) setLastError(lastErr);
+      } catch {}
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [lastError]);
 
   useEffect(() => {
     const unsub = onBotEvent((event) => {
@@ -48,7 +67,7 @@ export default function Dashboard() {
           setLastError(event.message);
           break;
         case 'log':
-          setLogs(prev => [...prev.slice(-50), event.message]);
+          setLogs(prev => [...prev.slice(-100), event.message]);
           break;
         default:
           break;
@@ -57,24 +76,32 @@ export default function Dashboard() {
     return unsub;
   }, []);
 
-  const [starting, setStarting] = useState(false);
+  const handleStart = useCallback(async () => {
+    setStarting(true);
+    setLastError(null);
+    const ok = await startBot();
+    setStarting(false);
+    if (ok) { setRunning(true); setStatus('running'); }
+  }, []);
 
-  const handleToggle = useCallback(async () => {
-    if (running) {
-      await stopBot();
-      setRunning(false);
-      setStatus('stopped');
-    } else {
-      setStarting(true);
-      setLastError(null);
-      const ok = await startBot();
-      setStarting(false);
-      if (ok) {
-        setRunning(true);
-        setStatus('running');
-      }
+  const handleStop = useCallback(async () => {
+    await stopBot();
+    setRunning(false);
+    setStatus('stopped');
+  }, []);
+
+  const handleRestart = useCallback(async () => {
+    setStarting(true);
+    setLastError(null);
+    try {
+      await invoke('restart_bot');
+      setRunning(true);
+      setStatus('running');
+    } catch (e) {
+      setLastError(typeof e === 'string' ? e : e?.message || 'Restart failed');
     }
-  }, [running]);
+    setStarting(false);
+  }, []);
 
   const statusClass = status === 'running' ? 'status-running' : status === 'halted' ? 'status-halted' : 'status-stopped';
   const statusLabel = status === 'running' ? 'Running' : status === 'halted' ? 'Halted' : 'Stopped';
@@ -83,16 +110,31 @@ export default function Dashboard() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <h1 className="page-title" style={{ marginBottom: 0 }}>Dashboard</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className={`status-badge ${statusClass}`}>
             <span className="status-dot" />
             {statusLabel}
           </span>
-          <button className={`btn ${running ? 'btn-danger' : 'btn-primary'}`} onClick={handleToggle} disabled={starting}>
-            {starting ? 'Starting...' : running ? 'Stop Bot' : 'Start Bot'}
-          </button>
+          {running ? (
+            <>
+              <button className="btn btn-outline" onClick={handleRestart} disabled={starting}>
+                {starting ? 'Restarting...' : 'Restart'}
+              </button>
+              <button className="btn btn-danger" onClick={handleStop}>Stop</button>
+            </>
+          ) : (
+            <button className="btn btn-primary" onClick={handleStart} disabled={starting}>
+              {starting ? 'Starting...' : 'Start Bot'}
+            </button>
+          )}
         </div>
       </div>
+
+      {lastError && (
+        <div className="card" style={{ borderColor: 'var(--red)', background: 'var(--red-bg)', marginBottom: 16 }}>
+          <div style={{ color: 'var(--red)', fontWeight: 600, fontSize: 13 }}>Error: {lastError}</div>
+        </div>
+      )}
 
       <div className="grid-3">
         <div className="card">
@@ -102,10 +144,12 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="card">
-          <div className="card-title">Status</div>
+          <div className="card-title">Health</div>
           <div className="stat-big">{statusLabel}</div>
           <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
-            {lastError ? `Last error: ${lastError.slice(0, 60)}` : 'No errors'}
+            {running && healthSecs !== null
+              ? `Last heartbeat: ${healthSecs}s ago`
+              : running ? 'Waiting for heartbeat...' : 'Bot is stopped'}
           </div>
         </div>
         <div className="card">
@@ -122,12 +166,6 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-
-      {lastError && (
-        <div className="card" style={{ borderColor: 'var(--red)', background: 'var(--red-bg)', marginBottom: 16 }}>
-          <div style={{ color: 'var(--red)', fontWeight: 600, fontSize: 13 }}>Error: {lastError}</div>
-        </div>
-      )}
 
       <div className="grid-2">
         <div className="card">
@@ -185,7 +223,7 @@ export default function Dashboard() {
 
       <div className="card">
         <div className="card-title">Bot Log</div>
-        <div style={{ maxHeight: 200, overflowY: 'auto', fontFamily: 'monospace', fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+        <div style={{ maxHeight: 240, overflowY: 'auto', fontFamily: 'monospace', fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
           {logs.length > 0 ? logs.map((l, i) => <div key={i}>{l}</div>) : <div className="text-muted">Logs will appear here when the bot is running...</div>}
         </div>
       </div>
