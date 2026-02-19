@@ -27,7 +27,7 @@
     "marginUsePct": 0.75,
     "minHoldSeconds": 120,
     "reentryCooldownSeconds": 300,
-    "lossCooldownMinutes": 30,
+    "lossCooldownMinutes": 15,
     "atrMinPct": 0.002
   },
   "exits": {
