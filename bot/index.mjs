@@ -3,6 +3,12 @@ import { Hyperliquid } from 'hyperliquid';
 import { computeSignal } from './signal_engine.mjs';
 import { candleSnapshot, allMids, spotClearinghouseState } from './hl_info.mjs';
 
+const IS_TAURI = !!process.env.TAURI;
+function tauriEmit(evt) {
+  if (!IS_TAURI) return;
+  try { process.stdout.write(JSON.stringify(evt) + '\n'); } catch {}
+}
+
 const CONFIG_PATH = process.env.CONFIG || new URL('./config.json', import.meta.url).pathname;
 const TRADE_LOG = process.env.TRADE_LOG || new URL('./trades.jsonl', import.meta.url).pathname;
 const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
@@ -246,6 +252,8 @@ async function getBtcPosition(){
   const pos = (ch?.assetPositions||[]).map(p=>p.position).find(p=>p?.coin===cfg.market.coin);
   const szi = pos ? Number(pos.szi||0) : 0;
   const entryPx = pos ? Number(pos.entryPx||0) : 0;
+  const unrealizedPnl = pos ? Number(pos.unrealizedPnl||0) : 0;
+  tauriEmit({ type: 'position', data: { size: szi, entryPx, unrealizedPnl, side: szi > 0 ? 'long' : szi < 0 ? 'short' : null, coin: cfg.market.coin } });
   return { szi, entryPx };
 }
 
@@ -779,6 +787,7 @@ async function tryEnter(){
   if (sz <= 0) return;
 
   console.log(nowIso(), 'Signal', sig.side, 'enter notional', cappedNotional.toFixed(2), 'stopPct', sig.stopPct.toFixed(4), sig.reason);
+  tauriEmit({ type: 'signal', side: sig.side, reason: sig.reason, notional: cappedNotional, stopPct: sig.stopPct });
   await ensureLeverage();
   const resp = await placeMarket(sig.side, sz);
 
@@ -874,9 +883,11 @@ async function mainLoop(){
   if ((now - state.lastActionAt) < (cfg.risk.cooldownSeconds*1000)) return;
 
   const dp = await dailyPnl();
+  tauriEmit({ type: 'pnl', value: dp });
   if (dp < -Math.abs(cfg.risk.maxDailyLossUsd)){
     state.halted = true;
     console.log(nowIso(), 'HALT: daily pnl', dp, 'below', -Math.abs(cfg.risk.maxDailyLossUsd));
+    tauriEmit({ type: 'halt', reason: `daily pnl ${dp.toFixed(2)} below limit` });
     await cancelAllBtcOrders().catch(()=>{});
     try { await sdk.custom.marketClose(`${cfg.market.coin}-PERP`); } catch {}
     persistState();
@@ -901,10 +912,12 @@ function onLoopError(e){
   const backoffMs = Math.min(120_000, 5_000 * Math.pow(2, Math.min(6, state.errStreak)));
   state.backoffUntilMs = Date.now() + backoffMs;
   console.error(nowIso(), 'loop err', { msg, errStreak: state.errStreak, backoffMs });
+  tauriEmit({ type: 'error', message: msg });
   persistState();
 }
 
 console.log(nowIso(), 'HL signalbot starting', { wallet: cfg.wallet.address, coin: cfg.market.coin, pollMs: cfg.signal.pollMs });
+tauriEmit({ type: 'started' });
 
 // Prevent overlapping loops (can cause duplicate entries and duplicate TP/SL placement)
 let loopInFlight = false;

@@ -1,22 +1,31 @@
 {
   "name": "hl-signalbot",
   "version": "1.0.0",
-  "description": "Hyperliquid BTC-PERP signal trading bot with EMA/ATR strategy, native TP/SL, and Telegram pings",
+  "description": "Hyperliquid BTC-PERP signal trading bot desktop app",
   "private": true,
   "type": "module",
-  "bin": {
-    "hl-signalbot": "./cli.mjs"
-  },
   "scripts": {
-    "start": "node ./cli.mjs --config ./config.json",
-    "setup": "node ./cli.mjs setup"
+    "dev": "vite",
+    "build": "vite build",
+    "tauri": "tauri",
+    "bot:start": "node ./bot/cli.mjs --config ./bot/config.json",
+    "bot:setup": "node ./bot/cli.mjs setup"
   },
   "engines": {
     "node": ">=18.0.0"
   },
   "license": "MIT",
   "dependencies": {
-    "dotenv": "^17.2.4",
-    "hyperliquid": "^1.7.7"
+    "@tauri-apps/api": "^2.4.1",
+    "@tauri-apps/plugin-fs": "^2.4.5",
+    "@tauri-apps/plugin-shell": "^2.3.5",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.3.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.5.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^6.2.0"
   }
 }

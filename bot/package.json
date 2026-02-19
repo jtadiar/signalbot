@@ -1,0 +1,18 @@
+{
+  "name": "hl-signalbot-bot",
+  "version": "1.0.0",
+  "description": "HL Signalbot trading engine",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node ./cli.mjs --config ./config.json",
+    "setup": "node ./cli.mjs setup"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.4",
+    "hyperliquid": "^1.7.7"
+  }
+}

@@ -1,297 +1,108 @@
 # HL Signalbot
 
-> Automated Hyperliquid BTC-PERP signal trading bot with EMA/ATR strategy, native TP/SL orders, and Telegram notifications.
+Desktop trading bot for Hyperliquid perpetuals. EMA/ATR signal engine with native TP/SL, risk guardrails, and Telegram notifications — all running locally on your machine.
 
-![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen) ![License](https://img.shields.io/badge/license-MIT-blue)
+## Architecture
 
-**HL Signalbot** is a single-purpose trading bot that runs locally on your machine. It monitors BTC-PERP on [Hyperliquid](https://hyperliquid.xyz), enters positions based on a deterministic EMA/ATR signal, places native take-profit and stop-loss trigger orders, and optionally pings a Telegram channel on every trade event.
+```
+signalbot/
+├── bot/                  # Node.js trading engine
+│   ├── index.mjs         # Main trading loop
+│   ├── signal_engine.mjs # EMA/ATR signal computation
+│   ├── hl_info.mjs       # Hyperliquid API helpers
+│   ├── cli.mjs           # CLI entry point
+│   ├── setup.mjs         # Interactive CLI setup wizard
+│   └── config.example.json
+├── src/                  # React frontend (Vite)
+│   ├── pages/            # License, Setup, Dashboard, TradeLog, Settings
+│   ├── lib/              # Bot IPC + config helpers
+│   └── styles.css
+├── src-tauri/            # Tauri (Rust) desktop shell
+└── package.json
+```
 
-Your private key stays on your device. The bot never uploads secrets anywhere.
+## Quick Start (Desktop App)
 
----
+### Prerequisites
 
-## How the Strategy Works
+- [Node.js](https://nodejs.org/) >= 18
+- [Rust](https://rustup.rs/) (for building the native shell)
 
-The signal engine uses two timeframes and three indicators:
-
-| Indicator | Timeframe | Purpose |
-|-----------|-----------|---------|
-| EMA 50 | 1h | Trend filter -- is price above (bullish) or below (bearish)? |
-| EMA 20 | 15m | Trigger -- detects pullback-then-reclaim pattern |
-| ATR 14 | 15m | Volatility -- sizes the stop-loss dynamically |
-
-**Entry logic:**
-1. **Trend:** Price is above the 1h EMA 50 (long bias) or below it (short bias).
-2. **Trigger:** The previous 15m candle closed on the wrong side of the 15m EMA 20, and the current candle reclaims it.
-3. **Stop sizing:** Stop distance = ATR x multiplier (default 1.5), capped at `maxStopPct`.
-
-**Exit logic:**
-- **Take-profit ladder:** Two R-multiple targets (default **2R** and **4R**), each closing **25%** of the original position, leaving ~**50% runner**.
-- **Stop movement after TP1:** After TP1 is hit, the stop-loss moves to **breakeven** (entry price).
-- **Stop movement after TP2:** After TP2 is hit, the stop-loss moves to the **TP1 price** (locks in profit on the runner).
-- **Trailing stop (runner):** After TP2, the bot can trail the stop for the remaining runner by a configurable percentage (default: **0.50%**, `trailPct: 0.005`).
-- **Stop-loss:** ATR-sized, placed as a native Hyperliquid trigger order.
-- **Runner exit (optional):** Can also close the remaining runner on an opposite signal.
-
-All TP/SL orders are placed as **native Hyperliquid trigger orders** so they appear in the Hyperliquid UI and execute even if the bot goes offline.
-
----
-
-## Quick Start
+### Install & Run
 
 ```bash
-git clone https://github.com/jtadiar/signalbot.git hl-signalbot
-cd hl-signalbot
-npm ci
-npm run setup
+git clone https://github.com/jtadiar/signalbot.git
+cd signalbot
+
+# Install frontend + Tauri dependencies
+npm install
+
+# Install bot dependencies
+cd bot && npm install && cd ..
+
+# Run in development mode
+npx tauri dev
+```
+
+### Build Installer
+
+```bash
+npx tauri build
+```
+
+This produces a `.dmg` (macOS) or `.msi` (Windows) in `src-tauri/target/release/bundle/`.
+
+## CLI Mode (Developers)
+
+You can run the bot directly without the desktop app:
+
+```bash
+cd bot
+cp config.example.json config.json   # edit with your settings
+cp .env.example .env                 # add secrets
 npm start
 ```
 
-The `setup` command walks you through wallet, private key, Telegram, and risk configuration interactively.
-
----
-
-## Manual Configuration
-
-If you prefer to configure manually instead of using the setup wizard:
-
-### 1. Create `.env`
+Or use the interactive setup wizard:
 
 ```bash
-cp .env.example .env
+npm run setup
 ```
 
-Edit `.env`:
+## How It Works
 
-```bash
-HL_WALLET_ADDRESS=0xYOUR_WALLET_ADDRESS
-HL_PRIVATE_KEY_PATH=~/.config/hl-signalbot/private_key
-# or: HL_PRIVATE_KEY=your_hex_key
+1. **License activation** — enter your key on first launch
+2. **Setup wizard** — wallet address, private key (stored locally), funding check, Telegram, risk params
+3. **Dashboard** — start/stop bot, view position, PnL, signals, and live logs
+4. **Trade log** — scrollable history of all opens and closes with PnL
+5. **Settings** — tune signal parameters, risk controls, and TP/SL without editing JSON
 
-TG_ENABLED=true
-TG_CHAT=@your_channel
-TG_TOKEN_PATH=~/.config/hl-signalbot/tg_token
-# or: TG_TOKEN=123456:ABCDEF
-```
+## Strategy
 
-### 2. Create `config.json`
-
-```bash
-cp config.example.json config.json
-```
-
-Edit `config.json` to set your wallet address and tune parameters.
-
-### 3. Store secrets securely
-
-```bash
-mkdir -p ~/.config/hl-signalbot
-echo "YOUR_PRIVATE_KEY_HEX" > ~/.config/hl-signalbot/private_key
-chmod 600 ~/.config/hl-signalbot/private_key
-```
-
----
-
-## Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `HL_WALLET_ADDRESS` | Yes | Your Hyperliquid wallet address (0x...) |
-| `HL_PRIVATE_KEY` | One of these | Private key as hex string |
-| `HL_PRIVATE_KEY_PATH` | One of these | Path to file containing private key |
-| `TG_ENABLED` | No | Enable Telegram pings (`true`/`false`) |
-| `TG_CHAT` | No | Telegram chat ID or `@channel` username |
-| `TG_TOKEN` | No | Telegram bot token |
-| `TG_TOKEN_PATH` | No | Path to file containing Telegram bot token |
-| `CONFIG` | No | Override path to config.json |
-| `TRADE_LOG` | No | Override path for trade event JSONL log (default: `./trades.jsonl`) |
-
----
-
-## Config Reference
-
-All fields in `config.json` / `config.example.json`:
-
-### `market`
-
-| Field | Default | Description |
-|-------|---------|-------------|
-| `coin` | `"BTC"` | Trading pair (used as `{coin}-PERP`) |
-
-### `signal`
-
-| Field | Default | Description |
-|-------|---------|-------------|
-| `pollMs` | `20000` | Main loop interval in milliseconds |
-| `emaTrendPeriod` | `50` | EMA period for 1h trend filter |
-| `emaTriggerPeriod` | `20` | EMA period for 15m entry trigger |
-| `atrPeriod` | `14` | ATR lookback period (15m) |
-| `atrMult` | `1.5` | ATR multiplier for stop distance |
-| `maxStopPct` | `0.035` | Maximum stop distance as a fraction of price |
-
-### `risk`
-
-| Field | Default | Description |
-|-------|---------|-------------|
-| `maxLeverage` | `10` | Maximum leverage (cross margin) |
-| `maxDailyLossUsd` | `200` | Halt trading if daily PnL drops below this |
-| `riskPerTradePct` | `0.03` | Fraction of equity risked per trade |
-| `marginUsePct` | `0.75` | Fraction of equity used as margin (if set, overrides risk-based sizing) |
-| `cooldownSeconds` | `10` | Minimum seconds between loop iterations |
-| `minHoldSeconds` | `120` | Minimum hold time before exit |
-| `reentryCooldownSeconds` | `300` | Cooldown after any exit before re-entering |
-| `lossCooldownMinutes` | `15` | Cooldown after a losing trade |
-| `atrMinPct` | `0.002` | Minimum ATR as fraction of price to generate a signal |
-
-### `exits`
-
-| Field | Default | Description |
-|-------|---------|-------------|
-| `stopLossPct` | `0.10` | Hard stop-loss cap as fraction of entry |
-| `maxMarginLossPct` | `0.03` | Max loss as fraction of margin used |
-| `trailToBreakevenOnTp1` | `true` | Move stop to breakeven after TP1 hit |
-| `trailStopToTp1OnTp2` | `true` | After TP2 hit, move stop to the TP1 price (locks profit on the runner) |
-| `trailingAfterTp2` | enabled | After TP2, start trailing the stop for the remaining runner |
-| `tp` | 2-level ladder | Array of `{rMultiple, closeFrac}` objects (e.g. TP1 closes 25%, TP2 closes 25%, leaving ~50% runner) |
-| `tpMinUsd` | `[10, 25, 60]` | Minimum USD profit per TP level (extra entries are ignored if you only have 2 TPs) |
-| `runnerExit` | `"signal"` | Optional runner exit: close remaining position when an opposite signal prints (`"signal"` or `null`) |
-
-#### Trailing stop tuning (how to tighten / loosen)
-
-After **TP2** is hit, the bot can start trailing the stop for the remaining runner.
-
-The key parameter is:
-
-- `exits.trailingAfterTp2.trailPct`
-
-Examples (BTC):
-- `0.0025` = **0.25%** trailing distance (tighter; locks profit faster; more likely to get stopped on bounces)
-- `0.005` = **0.50%** trailing distance (balanced default)
-- `0.008` = **0.80%** trailing distance (looser; gives trend more room; larger giveback)
-
-How to interpret “tight vs loose”:
-- **Tighten** the trailing stop (smaller `trailPct`) if you’re happy taking profit earlier and you often see sharp snap-backs after TP2.
-- **Loosen** the trailing stop (larger `trailPct`) if you keep getting stopped out on normal pullbacks but the trend continues.
-
-Also consider these interactions:
-- If you lower leverage / position size, it becomes psychologically easier to use a **looser** trailing stop.
-- If BTC is extremely volatile, you generally need a **looser** trail.
-
-### `display`
-
-| Field | Default | Description |
-|-------|---------|-------------|
-| `timezone` | `"UTC"` | IANA timezone for timestamp formatting in Telegram pings |
-
-### `telegram`
-
-| Field | Default | Description |
-|-------|---------|-------------|
-| `enabled` | `false` | Enable/disable Telegram notifications |
-| `channel` | `"@your_channel"` | Chat ID or @channel username |
-| `tokenPath` | | Path to file containing bot token |
-
----
-
-## Telegram Setup
-
-1. **Create a bot:** Open Telegram, chat with [@BotFather](https://t.me/BotFather), run `/newbot`, and save the token.
-2. **Create a channel:** Create a Telegram channel and add your bot as an admin with posting permissions.
-3. **Configure:** Run `npm run setup` or manually set `TG_ENABLED=true`, `TG_CHAT`, and `TG_TOKEN` / `TG_TOKEN_PATH` in `.env`.
-
-The bot sends messages for:
-- **OPEN** -- entry side, size, price, stop-loss, take-profit levels
-- **TP/CLOSE** -- partial or full close with net PnL
-- **STOP/LOSS** -- stop-loss hit with net PnL
-
-For private channels without a @username, use the numeric chat ID (starts with `-100`). You can get it via [@RawDataBot](https://t.me/RawDataBot) or similar.
-
----
-
-## Funding Your Hyperliquid Account
-
-The bot trades perpetual futures and needs USDC margin on Hyperliquid.
-
-1. **Use the same wallet** that the bot is configured with.
-2. **Get USDC** on Arbitrum (Hyperliquid's settlement chain).
-3. **Deposit to Hyperliquid** via the [Hyperliquid bridge](https://app.hyperliquid.xyz/portfolio) or directly from Arbitrum.
-4. **Transfer to trading** -- ensure USDC is in your perps/trading account (not just spot).
-5. **Verify** -- your USDC balance should appear when you run `npm run setup` or start the bot.
-
-The bot will not trade if your USDC balance is zero.
-
----
+- **Trend filter**: 50-period EMA on 1h candles determines bias (long/short)
+- **Trigger**: 20-period EMA crossover on 15m candles with ATR confirmation
+- **Entry**: taker market order with ATR-based stop distance
+- **Take-profit ladder**: 3 staged TPs at 1R, 2R, 3R closing 25% each
+- **Runner**: final 25% exits on signal reversal or trailing stop
+- **Stop-loss**: ATR-based, capped by `maxStopPct` and `maxMarginLossPct`
 
 ## Risk Controls
 
-These guardrails are enabled by default:
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `maxLeverage` | 10x | Max cross leverage |
+| `maxDailyLossUsd` | $200 | Bot halts if daily loss exceeds this |
+| `riskPerTradePct` | 3% | Equity risked per trade |
+| `marginUsePct` | 75% | Fraction of equity used as margin |
+| `lossCooldownMinutes` | 15 | Pause after a losing trade |
+| `reentryCooldownSeconds` | 300 | Minimum gap between trades |
 
-| Control | What it does |
-|---------|-------------|
-| **Daily loss halt** | Stops trading and closes all positions if daily PnL exceeds `maxDailyLossUsd` |
-| **Mandatory TP/SL** | Closes the position immediately if native TP/SL orders cannot be placed |
-| **Leverage cap** | Position size is capped by `maxLeverage` |
-| **Loss cooldown** | Pauses for `lossCooldownMinutes` after a losing trade |
-| **Reentry cooldown** | Pauses for `reentryCooldownSeconds` after any exit |
-| **Error backoff** | Exponential backoff (5s to 120s) on consecutive errors |
-| **Process lock** | Prevents overlapping main loops (no double entries) |
+## Security
 
----
-
-## Running as a Service
-
-For always-on operation:
-
-**tmux / screen:**
-```bash
-tmux new -s signalbot
-npm start
-# Ctrl+B then D to detach
-```
-
-**systemd (Linux):**
-```ini
-[Unit]
-Description=HL Signalbot
-After=network.target
-
-[Service]
-Type=simple
-WorkingDirectory=/path/to/hl-signalbot
-ExecStart=/usr/bin/node cli.mjs --config ./config.json
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-**launchd (macOS):** Create a plist in `~/Library/LaunchAgents/` pointing to the node binary and script.
-
----
-
-## Security Checklist
-
-- Never commit `.env`, private keys, or bot tokens (they are in `.gitignore`).
-- Prefer `*_PATH` variables and `chmod 600` on secret files.
-- Use a dedicated trading wallet with limited funds.
-- Keep `maxDailyLossUsd` conservative.
-- Do not run multiple bot instances against the same wallet.
-
----
-
-## Troubleshooting
-
-| Problem | Fix |
-|---------|-----|
-| Bot does nothing | Check Node.js >= 18, verify `.env` values, test `curl -X POST https://api-ui.hyperliquid.xyz/info -H 'content-type: application/json' -d '{"type":"allMids"}'` |
-| Telegram silent | Confirm `TG_ENABLED=true`, bot is admin in channel, `TG_CHAT` is correct |
-| Duplicate trades | Ensure only one instance is running |
-| `HALT` in logs | Daily loss limit hit. Reset by deleting `state.json` (the bot will resume next day) |
-| No USDC balance | Fund your Hyperliquid account -- see "Funding Your Hyperliquid Account" above |
-
----
+- Private keys are stored locally on your machine (never uploaded)
+- All trades execute directly via Hyperliquid API from your device
+- No server-side custody of keys or tokens
 
 ## License
 
-[MIT](LICENSE)
+MIT
