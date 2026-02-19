@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { startBot, stopBot, onBotEvent } from '../lib/bot';
+import { startBot, stopBot, onBotEvent, isBotRunning } from '../lib/bot';
 
 export default function Dashboard() {
   const [running, setRunning] = useState(false);
@@ -9,6 +9,16 @@ export default function Dashboard() {
   const [dailyPnl, setDailyPnl] = useState(null);
   const [lastError, setLastError] = useState(null);
   const [logs, setLogs] = useState([]);
+
+  // Sync with actual bot state on mount
+  useEffect(() => {
+    isBotRunning().then(isRunning => {
+      if (isRunning) {
+        setRunning(true);
+        setStatus('running');
+      }
+    });
+  }, []);
 
   useEffect(() => {
     const unsub = onBotEvent((event) => {
@@ -52,12 +62,17 @@ export default function Dashboard() {
   const handleToggle = useCallback(async () => {
     if (running) {
       await stopBot();
+      setRunning(false);
+      setStatus('stopped');
     } else {
       setStarting(true);
       setLastError(null);
       const ok = await startBot();
       setStarting(false);
-      if (!ok) setStatus('stopped');
+      if (ok) {
+        setRunning(true);
+        setStatus('running');
+      }
     }
   }, [running]);
 
