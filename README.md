@@ -25,8 +25,12 @@ signalbot/
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) >= 18
-- [Rust](https://rustup.rs/) (for building the native shell)
+1. **Node.js** >= 18 — [download here](https://nodejs.org/)
+2. **Rust** — install with one command:
+   ```bash
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   source "$HOME/.cargo/env"
+   ```
 
 ### Install & Run
 
@@ -34,13 +38,11 @@ signalbot/
 git clone https://github.com/jtadiar/signalbot.git
 cd signalbot
 
-# Install frontend + Tauri dependencies
+# Install dependencies
 npm install
-
-# Install bot dependencies
 cd bot && npm install && cd ..
 
-# Run in development mode
+# Launch the desktop app
 npx tauri dev
 ```
 
@@ -58,6 +60,7 @@ You can run the bot directly without the desktop app:
 
 ```bash
 cd bot
+npm install
 cp config.example.json config.json   # edit with your settings
 cp .env.example .env                 # add secrets
 npm start
@@ -66,6 +69,7 @@ npm start
 Or use the interactive setup wizard:
 
 ```bash
+cd bot
 npm run setup
 ```
 
