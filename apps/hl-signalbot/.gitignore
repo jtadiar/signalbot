@@ -1,0 +1,13 @@
+# dependencies
+node_modules/
+
+# runtime state / logs
+state.json
+*.out
+*.log
+
+# secrets / local config
+.env
+.env.*
+!.env.example
+config.local.json

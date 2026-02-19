@@ -6,15 +6,47 @@ import { candleSnapshot, allMids, spotClearinghouseState } from './hl_info.mjs';
 const CONFIG_PATH = process.env.CONFIG || new URL('./config.json', import.meta.url).pathname;
 const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
 
-const pk = fs.readFileSync(cfg.wallet.privateKeyPath, 'utf8').trim();
+// ---- Env overrides (secrets + user-local settings) ----
+// Prefer injecting secrets via env rather than editing tracked files.
+if (process.env.HL_WALLET_ADDRESS) cfg.wallet.address = String(process.env.HL_WALLET_ADDRESS).trim();
 
-// Optional Telegram ping on trade open (NO OpenAI/LLM needed)
+function readSecretFromPath(p){
+  try { return fs.readFileSync(p, 'utf8').trim(); } catch { return null; }
+}
+
+const pk = (
+  (process.env.HL_PRIVATE_KEY && String(process.env.HL_PRIVATE_KEY).trim()) ||
+  (process.env.HL_PRIVATE_KEY_PATH && readSecretFromPath(String(process.env.HL_PRIVATE_KEY_PATH).trim())) ||
+  (cfg?.wallet?.privateKeyPath && readSecretFromPath(String(cfg.wallet.privateKeyPath).trim())) ||
+  null
+);
+
+if (!cfg?.wallet?.address) {
+  console.error('Missing wallet address. Set wallet.address in config.json or HL_WALLET_ADDRESS in env.');
+  process.exit(1);
+}
+if (!pk) {
+  console.error('Missing private key. Set HL_PRIVATE_KEY or HL_PRIVATE_KEY_PATH in env (recommended), or wallet.privateKeyPath in config.json.');
+  process.exit(1);
+}
+
+// Optional Telegram pings (NO OpenAI/LLM needed)
 let TG_TOKEN = null;
+const tgEnabled = String(process.env.TG_ENABLED ?? cfg?.telegram?.enabled ?? '').toLowerCase();
+const tgOn = tgEnabled === 'true' || tgEnabled === '1' || tgEnabled === 'yes';
 try {
-  const p = cfg?.telegram?.tokenPath;
-  if (cfg?.telegram?.enabled && p) TG_TOKEN = fs.readFileSync(p, 'utf8').trim();
+  if (process.env.TG_TOKEN) TG_TOKEN = String(process.env.TG_TOKEN).trim();
+  else if (process.env.TG_TOKEN_PATH) TG_TOKEN = readSecretFromPath(String(process.env.TG_TOKEN_PATH).trim());
+  else {
+    const p = cfg?.telegram?.tokenPath;
+    if (p) TG_TOKEN = readSecretFromPath(String(p).trim());
+  }
 } catch {}
-const TG_CHAT = cfg?.telegram?.channel || null;
+const TG_CHAT = (process.env.TG_CHAT ? String(process.env.TG_CHAT).trim() : (cfg?.telegram?.channel || null));
+
+if (!tgOn) {
+  TG_TOKEN = null;
+}
 let _lastTgText = null;
 let _lastTgAtMs = 0;
 async function tgSend(text){
