@@ -1,8 +1,8 @@
 {
   "mode": "live",
   "wallet": {
-    "address": "0xA3ca8F3D8A021C3570EAC36b63AB2B79DAc5E06c",
-    "privateKeyPath": "/Users/jt/.config/hyperliquid/private_key"
+    "address": "0x0000000000000000000000000000000000000000",
+    "privateKeyPath": "~/.config/hl-signalbot/private_key"
   },
   "market": {
     "coin": "BTC"
@@ -52,9 +52,12 @@
   "sdk": {
     "disableAssetMapRefresh": true
   },
+  "display": {
+    "timezone": "UTC"
+  },
   "telegram": {
-    "enabled": true,
-    "channel": "@hyperpings",
-    "tokenPath": "/Users/jt/.config/hyperpings/bot_token"
+    "enabled": false,
+    "channel": "@your_channel",
+    "tokenPath": "~/.config/hl-signalbot/tg_token"
   }
 }

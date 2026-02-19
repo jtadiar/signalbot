@@ -4,6 +4,7 @@ import { computeSignal } from './signal_engine.mjs';
 import { candleSnapshot, allMids, spotClearinghouseState } from './hl_info.mjs';
 
 const CONFIG_PATH = process.env.CONFIG || new URL('./config.json', import.meta.url).pathname;
+const TRADE_LOG = process.env.TRADE_LOG || new URL('./trades.jsonl', import.meta.url).pathname;
 const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
 
 // ---- Env overrides (secrets + user-local settings) ----
@@ -69,10 +70,11 @@ async function tgSend(text){
   } catch {}
 }
 
-function fmtCET(isoOrMs){
+function fmtTime(isoOrMs){
   try {
     const d = typeof isoOrMs === 'number' ? new Date(isoOrMs) : new Date(isoOrMs);
-    return new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Copenhagen', hour: '2-digit', minute: '2-digit', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+    const tz = cfg?.display?.timezone || 'UTC';
+    return new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
   } catch {
     return String(isoOrMs);
   }
@@ -115,7 +117,7 @@ async function pingNewFills(){
           `${dir.toUpperCase()}`,
           `${sz.toFixed(5)} @ ${roundPx(cfg.market.coin, px)}`,
           (net !== null) ? `Net ${net.toFixed(2)} USDC` : null,
-          `(${fmtCET(t)})`,
+          `(${fmtTime(t)})`,
         ].filter(Boolean).join(' | ');
         await tgSend(msg);
       } else if (isOpen){
@@ -206,8 +208,7 @@ const loaded = loadState();
 if (loaded && typeof loaded === 'object') Object.assign(state, loaded);
 
 function roundSz(coin, sz){
-  const decimals = coin === 'BTC' ? 5 : 5;
-  return Number(Number(sz).toFixed(decimals));
+  return Number(Number(sz).toFixed(5));
 }
 
 function roundPx(coin, px){
@@ -521,7 +522,7 @@ async function manageOpenPosition(pos){
         ? ((side==='short' ? (state.entryPx - exitPx) : (exitPx - state.entryPx)) * exitSz)
         : null;
       const ev = { ts: nowIso(), action: 'CLOSE', side, sizeBtc: exitSz, entryPx: state.entryPx, exitPx, pnlUsd: pnlPartUsd, leader: 'signalbot', partial, tpIndex };
-      fs.appendFileSync('/Users/jt/.openclaw/workspace/memory/hyperliquid-trades.jsonl', JSON.stringify(ev) + "\n");
+      fs.appendFileSync(TRADE_LOG, JSON.stringify(ev) + "\n");
     } catch {}
     return resp;
   }
@@ -716,7 +717,7 @@ async function tryEnter(){
     totalSz = Number(fill?.totalSz || sz);
     const notionalUsd = (avgPx > 0 && totalSz > 0) ? (avgPx * totalSz) : null;
     const ev = { ts: nowIso(), action: 'OPEN', side: sig.side, sizeBtc: totalSz, entryPx: avgPx, notionalUsd, leader: 'signalbot' };
-    fs.appendFileSync('/Users/jt/.openclaw/workspace/memory/hyperliquid-trades.jsonl', JSON.stringify(ev) + "\n");
+    fs.appendFileSync(TRADE_LOG, JSON.stringify(ev) + "\n");
 
     // Ping Telegram channel on open (best-effort)
     try {

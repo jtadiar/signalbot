@@ -8,17 +8,39 @@ function parseArgs(argv){
     const a = argv[i];
     if (a === '--config' || a === '-c') out.config = argv[++i];
     else if (a === '--help' || a === '-h') out.help = true;
+    else if (a === 'setup') out.setup = true;
   }
   return out;
 }
 
 function usage(){
-  console.log(`HL Signalbot (OpenClaw + Hyperliquid)\n\nUsage:\n  hl-signalbot --config ./config.json\n\nOptions:\n  -c, --config   Path to config.json (optional if CONFIG env is set)\n  -h, --help     Show help\n\nEnv (recommended via .env):\n  HL_WALLET_ADDRESS\n  HL_PRIVATE_KEY or HL_PRIVATE_KEY_PATH\n  TG_ENABLED (optional)\n  TG_CHAT (optional)\n  TG_TOKEN or TG_TOKEN_PATH (optional)\n`);
+  console.log(`HL Signalbot (Hyperliquid)
+
+Usage:
+  hl-signalbot [options]
+  hl-signalbot setup          Interactive setup wizard
+
+Options:
+  -c, --config   Path to config.json (optional if CONFIG env is set)
+  -h, --help     Show help
+
+Env (recommended via .env):
+  HL_WALLET_ADDRESS
+  HL_PRIVATE_KEY or HL_PRIVATE_KEY_PATH
+  TG_ENABLED (optional)
+  TG_CHAT (optional)
+  TG_TOKEN or TG_TOKEN_PATH (optional)
+`);
 }
 
 const args = parseArgs(process.argv.slice(2));
 if (args.help){
   usage();
+  process.exit(0);
+}
+
+if (args.setup){
+  await import('./setup.mjs');
   process.exit(0);
 }
 

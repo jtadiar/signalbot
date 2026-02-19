@@ -3,11 +3,18 @@ node_modules/
 
 # runtime state / logs
 state.json
+trades.jsonl
 *.out
 *.log
+*.pid
 
 # secrets / local config
 .env
 .env.*
 !.env.example
+config.json
 config.local.json
+
+# OS
+.DS_Store
+Thumbs.db

@@ -56,17 +56,3 @@ export function computeSignal({ closes15m, closes1h, highs15m, lows15m, priceNow
   return null;
 }
 
-// Adjust stop-loss to breakeven plus fees
-export function adjustStopLoss(position) {
-  const breakevenPlusFees = position.entryPx * 1.001;
-  if (position.stopLoss < breakevenPlusFees) {
-    position.stopLoss = breakevenPlusFees;
-  }
-}
-
-// Consider adding to position if conditions are met
-export function considerAddingPosition({ priceNow, position }) {
-  if (priceNow > position.entryPx * 1.05) {  // Example condition to add
-    // Logic to add to position size goes here
-  }
-}

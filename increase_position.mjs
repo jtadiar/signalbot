@@ -1,8 +1,39 @@
+#!/usr/bin/env node
+
+// Utility: add margin to an existing BTC-PERP position.
+// Usage: ADD_MARGIN_USD=73 LEV=15 node increase_position.mjs
+
 import fs from 'fs';
 import { Hyperliquid } from 'hyperliquid';
 
-const cfg = JSON.parse(fs.readFileSync(new URL('./config.json', import.meta.url).pathname, 'utf8'));
-const pk = fs.readFileSync(cfg.wallet.privateKeyPath, 'utf8').trim();
+try {
+  const envPath = new URL('./.env', import.meta.url).pathname;
+  if (fs.existsSync(envPath)){
+    const dotenv = await import('dotenv');
+    dotenv.config({ path: envPath });
+  }
+} catch {}
+
+const CONFIG_PATH = process.env.CONFIG || new URL('./config.json', import.meta.url).pathname;
+const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+
+if (process.env.HL_WALLET_ADDRESS) cfg.wallet.address = String(process.env.HL_WALLET_ADDRESS).trim();
+
+function readSecretFromPath(p){
+  try { return fs.readFileSync(p, 'utf8').trim(); } catch { return null; }
+}
+
+const pk = (
+  (process.env.HL_PRIVATE_KEY && String(process.env.HL_PRIVATE_KEY).trim()) ||
+  (process.env.HL_PRIVATE_KEY_PATH && readSecretFromPath(String(process.env.HL_PRIVATE_KEY_PATH).trim())) ||
+  (cfg?.wallet?.privateKeyPath && readSecretFromPath(String(cfg.wallet.privateKeyPath).trim())) ||
+  null
+);
+
+if (!pk) {
+  console.error('Missing private key. Set HL_PRIVATE_KEY or HL_PRIVATE_KEY_PATH in .env');
+  process.exit(1);
+}
 
 const sdk = new Hyperliquid({
   privateKey: pk,
