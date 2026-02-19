@@ -1,11 +1,19 @@
-# signalbot
+# Signalbot (OpenClaw + Hyperliquid)
 
-A collection of open-source trading bot templates.
+This repo contains a single OpenClaw-friendly trading bot for Hyperliquid.
 
-## Included
+- Bot code + docs live in: `apps/hl-signalbot/`
+- Start here: `apps/hl-signalbot/README.md`
+- Product Requirements Document (PRD): `apps/hl-signalbot/PRD.md`
 
-- `hl-signalbot/` — Hyperliquid perp signal bot (native SL/TP triggers + Telegram pings)
+## Quick start
 
-## Getting started
+```bash
+cd apps/hl-signalbot
+npm ci
+cp .env.example .env
+# edit .env with your wallet/private key + optional telegram
+npm start
+```
 
-See the README inside each bot folder.
+> Security: never commit your `.env` or private key.
