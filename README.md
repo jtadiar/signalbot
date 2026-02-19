@@ -246,15 +246,6 @@ WantedBy=multi-user.target
 
 ---
 
-## Utility Scripts
-
-**Add to an open position:**
-```bash
-ADD_MARGIN_USD=73 LEV=15 node increase_position.mjs
-```
-
----
-
 ## Security Checklist
 
 - Never commit `.env`, private keys, or bot tokens (they are in `.gitignore`).
