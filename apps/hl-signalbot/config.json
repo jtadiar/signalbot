@@ -35,6 +35,7 @@
     "maxMarginLossPct": 0.03,
     "trailToBreakevenOnTp1": true,
     "trailStopToTp1OnTp2": true,
+    "trailingAfterTp2": { "enabled": true, "kind": "pct", "trailPct": 0.0025, "minUpdateSeconds": 20 },
 
     "tp": [
       {"rMultiple": 2, "closeFrac": 0.25},

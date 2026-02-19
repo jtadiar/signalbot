@@ -165,6 +165,7 @@ function persistState(){
         lastSignalAtMs: state.lastSignalAtMs,
         lastFillTimeMs: state.lastFillTimeMs,
         lastLossAtMs: state.lastLossAtMs,
+        lastTrailAtMs: state.lastTrailAtMs,
       }, null, 2)
     );
   } catch {}
@@ -200,6 +201,9 @@ const state = {
 
   // loss cooldown
   lastLossAtMs: 0,
+
+  // trailing stop bookkeeping
+  lastTrailAtMs: 0,
 };
 
 const loaded = loadState();
@@ -299,8 +303,9 @@ async function cancelAllBtcOrders({ cancelStops=true, cancelTps=true } = {}){
   } catch {}
 }
 
-async function replaceStopToBreakeven({ side, entryPx, absSz }){
-  // Cancel existing stop(s) and place a new stop-market at breakeven for remaining size.
+async function replaceStop({ side, stopPx, absSz }){
+  // Cancel existing stop(s) and place a new stop-market at stopPx for remaining size.
+  // Note: naming used to be replaceStopToBreakeven; we generalize to any stop price.
   try {
     const oo = await sdk.info.getFrontendOpenOrders(cfg.wallet.address, true);
     const coinPerp = `${cfg.market.coin}-PERP`;
@@ -309,7 +314,7 @@ async function replaceStopToBreakeven({ side, entryPx, absSz }){
       try { await sdk.exchange.cancelOrder(stops.map(o=>({ coin: coinPerp, o: o.oid }))); } catch {}
     }
 
-    const px = roundPx(cfg.market.coin, entryPx);
+    const px = roundPx(cfg.market.coin, stopPx);
     await sdk.exchange.placeOrder({
       coin: coinPerp,
       is_buy: side === 'short', // closing short is buy; closing long is sell
@@ -320,6 +325,11 @@ async function replaceStopToBreakeven({ side, entryPx, absSz }){
       grouping: 'positionTpsl',
     });
   } catch {}
+}
+
+// Backwards compatibility (older call sites)
+async function replaceStopToBreakeven({ side, entryPx, absSz }){
+  return replaceStop({ side, stopPx: entryPx, absSz });
 }
 
 async function fetchOHLC(symbol, interval, lookback){
@@ -552,7 +562,7 @@ async function manageOpenPosition(pos){
             // Only move the stop in the risk-reducing direction.
             const bePx = Number(state.entryPx);
             if (bePx > 0){
-              await replaceStopToBreakeven({ side, entryPx: bePx, absSz });
+              await replaceStop({ side, stopPx: bePx, absSz });
               // Update our internal stop reference too.
               state.stopPx = bePx;
               persistState();
@@ -580,7 +590,7 @@ async function manageOpenPosition(pos){
                 const curStop = Number(state.stopPx || 0);
                 const better = (side === 'long') ? (tp1Px > curStop) : (curStop === 0 ? true : tp1Px < curStop);
                 if (better){
-                  await replaceStopToBreakeven({ side, entryPx: tp1Px, absSz });
+                  await replaceStop({ side, stopPx: tp1Px, absSz });
                   state.stopPx = tp1Px;
                   persistState();
                 }
@@ -619,6 +629,37 @@ async function manageOpenPosition(pos){
       }
     }
   }
+
+  // ---- Trailing stop (after TP2) ----
+  try {
+    const tr = cfg?.exits?.trailingAfterTp2;
+    const enabled = !!(tr && String(tr.enabled).toLowerCase() !== 'false');
+    if (enabled && state.tp2Done){
+      const kind = String(tr.kind || 'pct').toLowerCase();
+      const minUpdateSeconds = Number(tr.minUpdateSeconds ?? 20);
+      const now = Date.now();
+      if (!(Number.isFinite(minUpdateSeconds) && minUpdateSeconds >= 0) || (now - (state.lastTrailAtMs||0)) >= minUpdateSeconds*1000){
+        let candidate = null;
+        if (kind === 'pct'){
+          const trailPct = Number(tr.trailPct ?? 0);
+          if (trailPct > 0){
+            candidate = side === 'long' ? (px * (1 - trailPct)) : (px * (1 + trailPct));
+          }
+        }
+
+        if (candidate && candidate > 0){
+          const curStop = Number(state.stopPx || 0);
+          const improved = side === 'long' ? (candidate > curStop) : (curStop === 0 ? true : candidate < curStop);
+          if (improved){
+            await replaceStop({ side, stopPx: candidate, absSz });
+            state.stopPx = candidate;
+            state.lastTrailAtMs = now;
+            persistState();
+          }
+        }
+      }
+    }
+  } catch {}
 
   // ---- Stop-out: if price crosses stopPx, close remaining ----
   if ((side==='long' && px <= state.stopPx) || (side==='short' && px >= state.stopPx)){
