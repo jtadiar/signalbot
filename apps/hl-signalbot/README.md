@@ -1,125 +1,240 @@
-# HL Signalbot (for OpenClaw + Hyperliquid)
+# HL Signalbot (OpenClaw + Hyperliquid)
 
-A single-purpose, OpenClaw-friendly Hyperliquid perp signal-trading bot that:
-- polls market data,
-- computes a simple EMA/ATR-based signal,
-- opens/closes BTC-PERP positions on Hyperliquid,
-- places native TP/SL triggers on Hyperliquid, and
-- optionally pings a Telegram channel on opens/closes.
+A single-purpose, OpenClaw-friendly Hyperliquid perp signal-trading bot.
 
-This is intended to be run **inside an OpenClaw workspace**, but it is a normal Node.js CLI tool.
+It:
+- polls market data (Hyperliquid info API)
+- computes a deterministic signal (EMA trend/trigger + ATR stop sizing)
+- opens/closes a Hyperliquid perp position (default: `BTC-PERP`)
+- places **native** Hyperliquid TP/SL trigger orders (so they appear in the HL UI)
+- optionally sends **Telegram pings** (OPEN / TP-CLOSE / STOP-LOSS)
 
-> Security note: this bot trades live money. Use small size first, and prefer testnet / paper checks before trusting it.
+> ⚠️ Trades live money. Start small. Use a dedicated wallet with limited funds.
 
 ---
 
-## Quick start
+## Who this is for
 
-### 1) Clone into your OpenClaw workspace
+- You want a bot you can run inside your own **OpenClaw workspace** (or just on any machine with Node.js).
+- You want a bot with **transparent logic** (no LLMs required).
 
-Typical OpenClaw workspace path:
+---
+
+## Prerequisites
+
+- **Node.js 18+** (recommended: latest LTS)
+- `git`
+- A **Hyperliquid** wallet + private key
+- (Optional) A **Telegram bot token** if you want channel pings
+
+---
+
+## Install (clone + dependencies)
+
+### Option A — run inside your OpenClaw workspace (recommended)
 
 ```bash
 cd ~/.openclaw/workspace
-# put this repo content in your workspace (fork/clone however you manage your OpenClaw repo)
-```
 
-### 2) Install deps (inside the bot folder)
-
-```bash
-cd apps/hl-signalbot
+git clone -b signalbot-only https://github.com/jtadiar/signalbot.git
+cd signalbot/apps/hl-signalbot
 npm ci
 ```
 
-### 3) Configure secrets (recommended via .env)
+### Option B — run anywhere (normal Node project)
 
 ```bash
-cp .env.example .env
-$EDITOR .env
+git clone -b signalbot-only https://github.com/jtadiar/signalbot.git
+cd signalbot/apps/hl-signalbot
+npm ci
 ```
 
-You can provide the private key either as:
-- `HL_PRIVATE_KEY` (direct string), **or**
-- `HL_PRIVATE_KEY_PATH` (path to a file containing the key)
+---
 
-Recommended:
-- store keys in a file under `~/.config/...` with strict permissions:
+## Configure (wallet + private key)
 
-```bash
-chmod 600 ~/.config/hyperliquid/private_key
-```
+This bot is designed so users do **not** need to edit tracked files for secrets.
 
-### 4) Configure strategy settings
-
-Edit `config.json` (or make your own copy and point `CONFIG=/path/to/your.json`).
-
-Key fields:
-- `market.coin` (default `BTC`)
-- `risk.maxLeverage`
-- `risk.lossCooldownMinutes`
-- `risk.reentryCooldownSeconds`
-- `signal.*` (EMA/ATR settings)
-- `exits.tp` and `exits.*` (TP/SL plan)
-
-### 5) Run
+### 1) Create your `.env`
 
 ```bash
 cd apps/hl-signalbot
+cp .env.example .env
+```
+
+### 2) Add your wallet address
+
+In `.env`:
+
+```bash
+HL_WALLET_ADDRESS=0xYOUR_WALLET
+```
+
+### 3) Add your private key (recommended: file path)
+
+**Recommended**: store the key in a local file and point the bot to it.
+
+1) Create a key file (example path):
+
+```bash
+mkdir -p ~/.config/hyperliquid
+$EDITOR ~/.config/hyperliquid/private_key
+chmod 600 ~/.config/hyperliquid/private_key
+```
+
+2) In `.env`:
+
+```bash
+HL_PRIVATE_KEY_PATH=~/.config/hyperliquid/private_key
+```
+
+**Alternative** (works, but less safe):
+
+```bash
+HL_PRIVATE_KEY=YOUR_PRIVATE_KEY_HEX
+```
+
+### Secret precedence
+
+The bot loads the private key in this order:
+1. `HL_PRIVATE_KEY`
+2. `HL_PRIVATE_KEY_PATH`
+3. `wallet.privateKeyPath` inside `config.json`
+
+---
+
+## Configure strategy (risk / TP / SL)
+
+Default config is in `config.json`. Most users only need to tune:
+
+- `risk.maxLeverage`
+- `risk.maxDailyLossUsd`
+- `risk.lossCooldownMinutes`
+- `risk.reentryCooldownSeconds`
+- `signal.*` (EMA/ATR parameters)
+- `exits.tp` (TP ladder)
+
+Edit:
+
+```bash
+$EDITOR config.json
+```
+
+> Tip: if you want multiple configs, copy it (e.g. `config.local.json`) and run with `--config`.
+
+---
+
+## Telegram pings (step-by-step)
+
+You have two choices:
+- **Public channel** (easiest): use `@channelusername`
+- **Private channel**: use the numeric `chat_id` (starts with `-100...`)
+
+### 1) Create a Telegram bot (BotFather)
+
+1. Open Telegram and chat with **@BotFather**
+2. Run: `/newbot`
+3. Follow prompts → you’ll receive a token like:
+   `123456789:AA...`
+
+### 2) Create a channel and add the bot
+
+1. Create a Telegram **channel**
+2. Add your bot to the channel
+3. Promote it to **Admin** (needs permission to post)
+
+### 3) Set the Telegram env vars
+
+In your `.env`:
+
+```bash
+TG_ENABLED=true
+TG_CHAT=@your_channel_username
+TG_TOKEN=123456789:AA...
+```
+
+**More secure**: store the token in a file:
+
+```bash
+mkdir -p ~/.config/hyperpings
+$EDITOR ~/.config/hyperpings/bot_token
+chmod 600 ~/.config/hyperpings/bot_token
+```
+
+Then in `.env`:
+
+```bash
+TG_ENABLED=true
+TG_CHAT=@your_channel_username
+TG_TOKEN_PATH=~/.config/hyperpings/bot_token
+```
+
+### Private channel `chat_id` (if you don’t have a @username)
+
+If your channel is private, you usually need a numeric `chat_id`.
+Common approaches:
+- temporarily make the channel public to get a username, then switch back, **or**
+- use a helper like `@RawDataBot` / `@getmyid_bot` (third-party) to read the chat id, **or**
+- write a small script to call Telegram’s `getUpdates` once the bot has received a message.
+
+Once you have it:
+
+```bash
+TG_CHAT=-1001234567890
+```
+
+### What gets pinged
+
+When enabled, the bot sends messages like:
+- `HL SIGNALBOT OPEN | ...`
+- `HL SIGNALBOT TP/CLOSE | ... | Net 1.67 USDC | ...`
+- `HL SIGNALBOT STOP/LOSS | ...`
+
+---
+
+## Run
+
+### Start (recommended)
+
+```bash
 npm start
 ```
 
-Or directly:
+### Run with an explicit config path
 
 ```bash
 node ./cli.mjs --config ./config.json
 ```
 
----
-
-## Telegram pings
-
-If enabled, the bot will send messages like:
-- `HL SIGNALBOT OPEN | ...`
-- `HL SIGNALBOT TP/CLOSE | ...`
-- `HL SIGNALBOT STOP/LOSS | ...`
-
-You can configure Telegram either in `config.json` (tokenPath + channel) or via env:
-- `TG_TOKEN` or `TG_TOKEN_PATH`
-- `TG_CHAT`
-
----
-
-## Running under OpenClaw
-
-OpenClaw can run long-lived processes in several ways depending on your setup. The simplest is to run the bot on the same machine as your OpenClaw gateway/workspace:
+### Help
 
 ```bash
-cd ~/.openclaw/workspace/apps/hl-signalbot
-npm start
+node ./cli.mjs --help
 ```
 
-If you want this to be a persistent service, run it under your process manager of choice (tmux, systemd, launchd, etc.) on the OpenClaw host.
+---
+
+## Running as a service (optional)
+
+If you want it always-on, run it under a process manager:
+- `tmux`
+- `systemd` (Linux)
+- `launchd` (macOS)
 
 ---
 
 ## Security checklist
 
-- Never commit `.env`, private keys, bot tokens, or `state.json`.
-- Prefer `HL_PRIVATE_KEY_PATH` pointing to a `chmod 600` file.
-- Consider using a dedicated trading wallet with limited funds.
+- Never commit `.env`, private keys, or bot tokens.
+- Prefer `*_PATH` vars + `chmod 600` on secret files.
+- Use a dedicated trading wallet with limited funds.
 - Keep `maxDailyLossUsd` conservative.
-- Start with smaller leverage/size and gradually increase.
+- Don’t run multiple instances against the same wallet.
 
 ---
 
 ## Troubleshooting
 
-- If nothing happens: check `pollMs`, verify the bot can reach `https://api-ui.hyperliquid.xyz/info`.
-- If Telegram is silent: verify `TG_CHAT` and token, and that the bot has permission to post.
-- If you see repeated identical pings: ensure you’re only running one instance; the bot de-dupes identical messages for 2 minutes, but double-running can still cause odd behavior.
-
----
-
-## License
-
-Add a license if you intend to distribute publicly.
+- **Bot does nothing:** check Node version, confirm `.env` values, and verify you can reach `https://api-ui.hyperliquid.xyz/info`.
+- **Telegram silent:** confirm `TG_ENABLED=true`, the bot is admin in the channel, and `TG_CHAT` is correct.
+- **Weird duplicate behavior:** ensure only one instance is running.
