@@ -369,6 +369,37 @@ fn stop_bot(state: State<BotState>) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn close_position(app: tauri::AppHandle) -> Result<String, String> {
+    let node = find_node()?;
+    let bot_dir = find_bot_dir(&app)?;
+    let config_dir = bot_config_dir(&app)?;
+    let close_script = bot_dir.join("close.mjs");
+    if !close_script.exists() {
+        return Err("close.mjs not found in bot directory".into());
+    }
+    let cfg_path = config_dir.join("config.json");
+    let env_path = config_dir.join(".env");
+
+    let mut cmd = StdCommand::new(&node);
+    cmd.arg(close_script.to_str().unwrap())
+        .arg(cfg_path.to_str().unwrap())
+        .current_dir(&bot_dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if env_path.exists() {
+        cmd.env("DOTENV_CONFIG_PATH", env_path.to_str().unwrap());
+    }
+
+    let output = cmd.output().map_err(|e| format!("Failed to run close script: {}", e))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if stdout.is_empty() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(format!("Close script failed: {}", stderr));
+    }
+    Ok(stdout)
+}
+
+#[tauri::command]
 async fn restart_bot(app: tauri::AppHandle, state: State<'_, BotState>) -> Result<(), String> {
     // Stop if running
     {
@@ -403,6 +434,7 @@ pub fn run() {
             start_bot,
             stop_bot,
             restart_bot,
+            close_position,
             get_bot_dir,
             get_config_dir,
             get_health,

@@ -239,6 +239,7 @@ async function spotUsdc(){
 }
 
 async function dailyPnl(){
+  let pnl = 0;
   try{
     const p = await sdk.info.portfolio(cfg.wallet.address, true);
     const day = Array.isArray(p) ? p.find(x=>x?.[0]==='day')?.[1] : null;
@@ -246,10 +247,23 @@ async function dailyPnl(){
     if (Array.isArray(pnlHist) && pnlHist.length){
       const last = pnlHist[pnlHist.length-1];
       const v = Number(last?.[1] ?? 0);
-      if (Number.isFinite(v)) return v;
+      if (Number.isFinite(v)) pnl = v;
     }
   } catch {}
-  return 0;
+
+  // Sum today's fees from fills
+  let fees = 0;
+  try {
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const fills = await sdk.info.getUserFillsByTime(cfg.wallet.address, startOfDay.getTime(), Date.now(), true);
+    for (const f of (fills || [])) {
+      const fee = Number(f.fee || 0);
+      if (Number.isFinite(fee)) fees += fee;
+    }
+  } catch {}
+
+  return { pnl, fees };
 }
 
 async function getBtcPosition(){
@@ -258,7 +272,61 @@ async function getBtcPosition(){
   const szi = pos ? Number(pos.szi||0) : 0;
   const entryPx = pos ? Number(pos.entryPx||0) : 0;
   const unrealizedPnl = pos ? Number(pos.unrealizedPnl||0) : 0;
-  tauriEmit({ type: 'position', data: { size: szi, entryPx, unrealizedPnl, side: szi > 0 ? 'long' : szi < 0 ? 'short' : null, coin: cfg.market.coin } });
+
+  // Extract account equity — try multiple paths since SDK versions vary
+  const accountValue = Number(
+    ch?.marginSummary?.accountValue
+    || ch?.crossMarginSummary?.accountValue
+    || ch?.marginSummary?.totalRawUsd
+    || ch?.crossMarginSummary?.totalRawUsd
+    || 0
+  );
+  if (accountValue > 0) {
+    tauriEmit({ type: 'equity', value: accountValue });
+  } else {
+    // Fallback: fetch spot USDC balance + unrealized PnL
+    try {
+      const spot = await spotClearinghouseState(cfg.wallet.address);
+      const usdc = (spot?.balances||[]).find(b=>b.coin==='USDC');
+      const spotBal = Number(usdc?.total ?? 0);
+      tauriEmit({ type: 'equity', value: spotBal + unrealizedPnl });
+    } catch {
+      tauriEmit({ type: 'equity', value: 0 });
+    }
+  }
+
+  let orders = [];
+  try {
+    const oo = await sdk.info.getFrontendOpenOrders(cfg.wallet.address, true);
+    const coinPerp = `${cfg.market.coin}-PERP`;
+    orders = (oo || [])
+      .filter(o => (o.coin === cfg.market.coin || o.coin === coinPerp) && o.reduceOnly === true)
+      .map(o => ({
+        type: (o.tpsl === 'sl' || String(o.orderType||'').toLowerCase().includes('stop')) ? 'sl' : 'tp',
+        triggerPx: Number(o.triggerPx || 0),
+        size: Number(o.sz || 0),
+      }));
+  } catch {}
+
+  // Sum trading fees for this position's fills
+  let posFees = 0;
+  if (Math.abs(szi) > 0) {
+    try {
+      // Use last exit time as start, or fall back to 7 days
+      const since = (state.lastExitAtMs && state.lastExitAtMs > 0)
+        ? state.lastExitAtMs
+        : (Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const fills = await sdk.info.getUserFillsByTime(cfg.wallet.address, since, Date.now(), true);
+      for (const f of (fills || [])) {
+        const fc = String(f.coin || '');
+        if (fc.includes(cfg.market.coin)) {
+          posFees += Math.abs(Number(f.fee || 0));
+        }
+      }
+    } catch {}
+  }
+
+  tauriEmit({ type: 'position', data: { size: szi, entryPx, unrealizedPnl, side: szi > 0 ? 'long' : szi < 0 ? 'short' : null, coin: cfg.market.coin, orders, fees: posFees, stopPx: state.stopPx || null, tp1Done: state.tp1Done, tp2Done: state.tp2Done } });
   return { szi, entryPx };
 }
 
@@ -476,9 +544,7 @@ async function manageOpenPosition(pos){
     await cancelAllBtcOrders({ cancelStops: !hasExistingStop, cancelTps: !hasExistingTp }).catch(()=>{});
 
     // NOTE: For perp orders the SDK expects the perp symbol (e.g. 'BTC-PERP').
-    const makeTrigger = async ({ isBuy, sz, triggerPx, tpsl }) => {
-      // Hyperliquid requires limit_px + order_type.trigger. For isMarket triggers, limit_px is ignored,
-      // but we still send something sane (same as triggerPx).
+    const makeTrigger = async ({ isBuy, sz, triggerPx, tpsl, grouping = 'positionTpsl' }) => {
       const px = roundPx(cfg.market.coin, triggerPx);
       return sdk.exchange.placeOrder({
         coin: `${cfg.market.coin}-PERP`,
@@ -487,7 +553,7 @@ async function manageOpenPosition(pos){
         limit_px: px,
         order_type: { trigger: { isMarket: true, triggerPx: px, tpsl } },
         reduce_only: true,
-        grouping: 'positionTpsl',
+        grouping,
       });
     };
 
@@ -502,11 +568,12 @@ async function manageOpenPosition(pos){
       wantCount += 1;
       try {
         await makeTrigger({
-          isBuy: side === 'short', // closing short is buy; closing long is sell
+          isBuy: side === 'short',
           sz: absSz,
           triggerPx: slPx,
           tpsl: 'sl',
         });
+        console.log(nowIso(), `SL placed: ${roundPx(cfg.market.coin, slPx)} for ${roundSz(cfg.market.coin, absSz)}`);
         okCount += 1;
       } catch (e){
         errors.push({ kind: 'sl', msg: e?.message || String(e) });
@@ -528,12 +595,16 @@ async function manageOpenPosition(pos){
         if (tpPx > 0 && tpSz > 0){
           wantCount += 1;
           try {
+            // TP1 uses positionTpsl so it renders on the HL chart alongside SL.
+            // Subsequent TPs use 'na' to avoid conflicting with the single TP chart line.
             await makeTrigger({
               isBuy: side === 'short',
               sz: tpSz,
               triggerPx: tpPx,
               tpsl: 'tp',
+              grouping: i === 0 ? 'positionTpsl' : 'na',
             });
+            console.log(nowIso(), `TP${i+1} placed: ${roundPx(cfg.market.coin, tpPx)} for ${roundSz(cfg.market.coin, tpSz)} (${Math.round(frac*100)}%)`);
             okCount += 1;
           } catch (e){
             errors.push({ kind: `tp${i+1}`, msg: e?.message || String(e) });
@@ -608,19 +679,55 @@ async function manageOpenPosition(pos){
 
       // ---- TP1 done detection ----
       if (!state.tp1Done && tp1Frac > 0){
-        // TP1 is considered done once remaining size is <= (1 - tp1Frac) + small epsilon
         if (remainingFrac <= (1 - tp1Frac + 0.001)){
           state.tp1Done = true;
+          console.log(nowIso(), `TP1 done. Remaining: ${(remainingFrac*100).toFixed(1)}% of initial`);
           persistState();
 
           if (cfg?.exits?.trailToBreakevenOnTp1){
             const bePx = Number(state.entryPx);
             if (bePx > 0){
               await replaceStop({ side, stopPx: bePx, absSz });
+              console.log(nowIso(), `SL moved to breakeven: ${roundPx(cfg.market.coin, bePx)}`);
               state.stopPx = bePx;
               persistState();
             }
           }
+
+          // Promote TP2 into positionTpsl group so it shows on the HL chart now that TP1 is gone.
+          try {
+            const tp2Cfg = tpPlan[1];
+            const r2 = Number(tp2Cfg?.rMultiple || 0);
+            const frac2 = Number(tp2Cfg?.closeFrac || 0);
+            if (r2 > 0 && frac2 > 0 && !state.tp2Done){
+              const tp2Px = tpPxFor({ side, entryPx: state.entryPx, stopPct, absSz, idx: 1, rMultiple: r2 });
+              const tp2Sz = Math.min(absSz, Number(state.initialSz || absSz) * frac2);
+              if (tp2Px > 0 && tp2Sz > 0){
+                const coinPerp = `${cfg.market.coin}-PERP`;
+                // Cancel the standalone TP2 and re-place as positionTpsl for chart visibility
+                const oo = await sdk.info.getFrontendOpenOrders(cfg.wallet.address, true);
+                const tp2Orders = (oo||[]).filter(o =>
+                  (o.coin === cfg.market.coin || o.coin === coinPerp) &&
+                  o.reduceOnly === true &&
+                  (String(o.orderType||'').toLowerCase().includes('take profit') || o.tpsl === 'tp') &&
+                  Math.abs(Number(o.triggerPx) - roundPx(cfg.market.coin, tp2Px)) < 1
+                );
+                if (tp2Orders.length){
+                  try { await sdk.exchange.cancelOrder(tp2Orders.map(o => ({ coin: coinPerp, o: o.oid }))); } catch {}
+                }
+                await sdk.exchange.placeOrder({
+                  coin: coinPerp,
+                  is_buy: side === 'short',
+                  sz: roundSz(cfg.market.coin, tp2Sz),
+                  limit_px: roundPx(cfg.market.coin, tp2Px),
+                  order_type: { trigger: { isMarket: true, triggerPx: roundPx(cfg.market.coin, tp2Px), tpsl: 'tp' } },
+                  reduce_only: true,
+                  grouping: 'positionTpsl',
+                });
+                console.log(nowIso(), `TP2 promoted to chart: ${roundPx(cfg.market.coin, tp2Px)}`);
+              }
+            }
+          } catch {}
         }
       }
 
@@ -629,6 +736,7 @@ async function manageOpenPosition(pos){
       if (!state.tp2Done && tp12Frac > 0 && tp2Frac > 0){
         if (remainingFrac <= (1 - tp12Frac + 0.001)){
           state.tp2Done = true;
+          console.log(nowIso(), `TP2 done. Remaining: ${(remainingFrac*100).toFixed(1)}% of initial`);
           persistState();
 
           if (cfg?.exits?.trailStopToTp1OnTp2){
@@ -640,6 +748,7 @@ async function manageOpenPosition(pos){
                 const better = (side === 'long') ? (tp1Px > curStop) : (curStop === 0 ? true : tp1Px < curStop);
                 if (better){
                   await replaceStop({ side, stopPx: tp1Px, absSz });
+                  console.log(nowIso(), `SL moved to TP1 price: ${roundPx(cfg.market.coin, tp1Px)} (was ${roundPx(cfg.market.coin, curStop)})`);
                   state.stopPx = tp1Px;
                   persistState();
                 }
@@ -701,6 +810,7 @@ async function manageOpenPosition(pos){
           const improved = side === 'long' ? (candidate > curStop) : (curStop === 0 ? true : candidate < curStop);
           if (improved){
             await replaceStop({ side, stopPx: candidate, absSz });
+            console.log(nowIso(), `Trailing stop: ${roundPx(cfg.market.coin, curStop)} → ${roundPx(cfg.market.coin, candidate)} (mid=${roundPx(cfg.market.coin, px)})`);
             state.stopPx = candidate;
             state.lastTrailAtMs = now;
             persistState();
@@ -929,8 +1039,8 @@ async function mainLoop(){
   if ((now - state.lastActionAt) < (cfg.risk.cooldownSeconds*1000)) return;
 
   console.log(nowIso(), 'polling', cfg.market.coin, '...');
-  const dp = await dailyPnl();
-  tauriEmit({ type: 'pnl', value: dp });
+  const { pnl: dp, fees: dailyFees } = await dailyPnl();
+  tauriEmit({ type: 'pnl', value: dp, fees: dailyFees });
   if (dp < -Math.abs(cfg.risk.maxDailyLossUsd)){
     state.halted = true;
     console.log(nowIso(), 'HALT: daily pnl', dp, 'below', -Math.abs(cfg.risk.maxDailyLossUsd));
@@ -946,6 +1056,25 @@ async function mainLoop(){
     await manageOpenPosition(pos);
     await pingNewFills();
     return;
+  }
+
+  // Position is flat — if we had an active position, it was closed by HL trigger or externally.
+  // Clean up orphaned orders and reset state so the bot can re-enter cleanly.
+  if (state.activeSide) {
+    console.log(nowIso(), 'Position closed externally (HL trigger or manual). Cleaning up.');
+    await cancelAllBtcOrders().catch(() => {});
+    state.lastExitAtMs = Date.now();
+    state.activeSide = null;
+    state.entryPx = null;
+    state.entryNotionalUsd = null;
+    state.initialSz = null;
+    state.marginUsd = null;
+    state.stopPct = null;
+    state.stopPx = null;
+    state.tp1Done = false;
+    state.tp2Done = false;
+    state.exitsPlacedForPosKey = null;
+    persistState();
   }
 
   await tryEnter();

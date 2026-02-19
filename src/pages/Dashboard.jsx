@@ -8,10 +8,15 @@ export default function Dashboard() {
   const [position, setPosition] = useState(null);
   const [lastSignal, setLastSignal] = useState(null);
   const [dailyPnl, setDailyPnl] = useState(null);
+  const [dailyFees, setDailyFees] = useState(0);
   const [lastError, setLastError] = useState(null);
   const [logs, setLogs] = useState([]);
   const [starting, setStarting] = useState(false);
   const [healthSecs, setHealthSecs] = useState(null);
+  const [closing, setClosing] = useState(false);
+  const [closeResult, setCloseResult] = useState(null);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [equity, setEquity] = useState(null);
 
   // Sync with actual bot state on mount
   useEffect(() => {
@@ -59,6 +64,10 @@ export default function Dashboard() {
           break;
         case 'pnl':
           setDailyPnl(event.value);
+          if (event.fees !== undefined) setDailyFees(event.fees);
+          break;
+        case 'equity':
+          setEquity(event.value);
           break;
         case 'halt':
           setStatus('halted');
@@ -103,6 +112,35 @@ export default function Dashboard() {
     setStarting(false);
   }, []);
 
+  const handleCloseTrade = useCallback(async () => {
+    setClosing(true);
+    setCloseResult(null);
+    setLastError(null);
+    try {
+      const raw = await invoke('close_position');
+      const result = JSON.parse(raw);
+      if (result.ok && result.closed) {
+        const pnl = Number(result.pnlUsd || 0);
+        setCloseResult({
+          pnl,
+          exitPx: result.exitPx,
+          side: result.side,
+          won: pnl >= 0,
+        });
+        setPosition(null);
+      } else if (result.ok && !result.closed) {
+        setCloseResult({ noPosition: true });
+      } else {
+        setLastError(result.error || 'Close failed');
+      }
+    } catch (e) {
+      setLastError(typeof e === 'string' ? e : e?.message || 'Close failed');
+    }
+    setClosing(false);
+    setConfirmClose(false);
+  }, []);
+
+  const hasPosition = position && position.size !== 0;
   const statusClass = status === 'running' ? 'status-running' : status === 'halted' ? 'status-halted' : 'status-stopped';
   const statusLabel = status === 'running' ? 'Running' : status === 'halted' ? 'Halted' : 'Stopped';
 
@@ -136,12 +174,38 @@ export default function Dashboard() {
         </div>
       )}
 
+      {closeResult && !closeResult.noPosition && (
+        <div className="card" style={{ borderColor: closeResult.won ? 'var(--green)' : 'var(--red)', background: closeResult.won ? 'var(--green-bg)' : 'var(--red-bg)', marginBottom: 16 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, color: closeResult.won ? 'var(--green)' : 'var(--red)' }}>
+            Trade Closed — {closeResult.won ? 'WIN' : 'LOSS'}: {closeResult.pnl >= 0 ? '+' : ''}${closeResult.pnl?.toFixed(2)} @ ${closeResult.exitPx?.toLocaleString()}
+          </div>
+        </div>
+      )}
+
+      {confirmClose && (
+        <div className="card" style={{ borderColor: 'var(--yellow)', background: 'rgba(255, 193, 7, 0.08)', marginBottom: 16 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>Close this trade at market price?</div>
+          <div className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>This will immediately market-close your position and cancel all TP/SL orders.</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-danger" onClick={handleCloseTrade} disabled={closing}>
+              {closing ? 'Closing...' : 'Yes, Close Trade'}
+            </button>
+            <button className="btn btn-outline" onClick={() => setConfirmClose(false)} disabled={closing}>Cancel</button>
+          </div>
+        </div>
+      )}
+
       <div className="grid-3">
         <div className="card">
           <div className="card-title">Daily PnL</div>
           <div className={`stat-big ${dailyPnl > 0 ? 'text-green' : dailyPnl < 0 ? 'text-red' : ''}`}>
             {dailyPnl !== null ? `${dailyPnl >= 0 ? '+' : ''}$${dailyPnl.toFixed(2)}` : '--'}
           </div>
+          {dailyFees > 0 && (
+            <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+              Fees paid today: -${dailyFees.toFixed(2)}
+            </div>
+          )}
         </div>
         <div className="card">
           <div className="card-title">Health</div>
@@ -153,24 +217,32 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="card">
-          <div className="card-title">Last Signal</div>
+          <div className="card-title">Equity</div>
           <div className="stat-big">
-            {lastSignal ? (
-              <span className={lastSignal.side === 'long' ? 'text-green' : 'text-red'}>
-                {lastSignal.side?.toUpperCase()}
-              </span>
-            ) : '--'}
+            {equity !== null ? `$${equity.toFixed(2)}` : '--'}
           </div>
           <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
-            {lastSignal?.reason?.slice(0, 60) || 'Waiting for signal...'}
+            Live HL balance
           </div>
         </div>
       </div>
 
       <div className="grid-2">
         <div className="card">
-          <div className="card-title">Current Position</div>
-          {position && position.size !== 0 ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div className="card-title" style={{ marginBottom: 0 }}>Current Position</div>
+            {hasPosition && !confirmClose && (
+              <button
+                className="btn btn-danger"
+                style={{ padding: '4px 12px', fontSize: 12 }}
+                onClick={() => { setCloseResult(null); setConfirmClose(true); }}
+                disabled={closing}
+              >
+                Close Trade
+              </button>
+            )}
+          </div>
+          {hasPosition ? (
             <>
               <div className="card-row">
                 <span className="card-label">Side</span>
@@ -192,6 +264,12 @@ export default function Dashboard() {
                   ${position.unrealizedPnl?.toFixed(2)}
                 </span>
               </div>
+              {position.fees > 0 && (
+                <div className="card-row" style={{ opacity: 0.7, fontSize: 13 }}>
+                  <span className="card-label">Fees (open + close)</span>
+                  <span className="card-value text-red">-${position.fees.toFixed(2)}</span>
+                </div>
+              )}
             </>
           ) : (
             <div className="text-muted" style={{ padding: '20px 0', textAlign: 'center' }}>No open position</div>
@@ -225,6 +303,22 @@ export default function Dashboard() {
         <div className="card-title">Bot Log</div>
         <div style={{ maxHeight: 240, overflowY: 'auto', fontFamily: 'monospace', fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
           {logs.length > 0 ? logs.map((l, i) => <div key={i}>{l}</div>) : <div className="text-muted">Logs will appear here when the bot is running...</div>}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">Last Signal</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div className="stat-big">
+            {lastSignal ? (
+              <span className={lastSignal.side === 'long' ? 'text-green' : 'text-red'}>
+                {lastSignal.side?.toUpperCase()}
+              </span>
+            ) : '--'}
+          </div>
+          <div className="text-muted" style={{ fontSize: 12 }}>
+            {lastSignal?.reason?.slice(0, 80) || 'Waiting for signal...'}
+          </div>
         </div>
       </div>
     </div>

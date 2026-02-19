@@ -82,7 +82,7 @@ export default function Setup({ onComplete }) {
         market: { coin },
         signal: { pollMs: 20000, timeframe: { trend: '1h', trigger: '15m' }, emaTrendPeriod: 50, emaTriggerPeriod: 20, atrPeriod: 14, atrMult: 1.5, maxStopPct: 0.035 },
         risk: { maxLeverage: Number(maxLeverage) || 10, maxDailyLossUsd: Number(maxDailyLoss) || 200, cooldownSeconds: 10, riskPerTradePct: 0.03, marginUsePct: 0.75, minHoldSeconds: 120, reentryCooldownSeconds: 300, lossCooldownMinutes: 15, atrMinPct: 0.002 },
-        exits: { stopLossPct: 0.10, maxMarginLossPct: 0.03, trailToBreakevenOnTp1: true, tp: [{ rMultiple: 1, closeFrac: 0.25 }, { rMultiple: 2, closeFrac: 0.25 }, { rMultiple: 3, closeFrac: 0.25 }], tpMinUsd: [10, 25, 60], runnerCloseFrac: 0.25, runnerExit: 'signal' },
+        exits: { stopLossPct: 0.10, maxMarginLossPct: 0.03, trailToBreakevenOnTp1: true, trailStopToTp1OnTp2: true, trailingAfterTp2: { enabled: true, kind: 'pct', trailPct: 0.005, minUpdateSeconds: 20 }, tp: [{ rMultiple: 2, closeFrac: 0.25 }, { rMultiple: 4, closeFrac: 0.25 }], tpMinUsd: [10, 25], runnerExit: 'signal' },
         execution: { orderType: 'taker' },
         sdk: { disableAssetMapRefresh: true },
         display: { timezone: 'UTC' },
