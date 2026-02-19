@@ -392,12 +392,53 @@ async function manageOpenPosition(pos){
 
   // ---- Exit plan (Price-based, R-multiple) ----
   // stopPct comes from the entry signal (ATR-sized) and is persisted in state.
-  const stopPct = Number(state.stopPct || 0);
+  let stopPct = Number(state.stopPct || 0);
   if (!(stopPct > 0)) {
     // Without stopPct we cannot compute R-based exits safely.
-    state.lastActionAt = Date.now();
-    persistState();
-    return;
+    // This can happen if the bot restarts mid-position and state.json lacked stopPct.
+    // Best-effort recovery: infer stopPct from existing native TP1 trigger (if present).
+    try {
+      const tpPlan = Array.isArray(cfg?.exits?.tp) ? cfg.exits.tp : [];
+      const r1 = Number(tpPlan?.[0]?.rMultiple || 0);
+      if (r1 > 0 && state.entryPx && absSz > 0){
+        const oo = await sdk.info.getFrontendOpenOrders(cfg.wallet.address, true);
+        const coinPerp = `${cfg.market.coin}-PERP`;
+        const reduceOnly = (oo||[]).filter(o => (o.coin===cfg.market.coin || o.coin===coinPerp) && o.reduceOnly===true);
+        const tps = reduceOnly.filter(o => String(o.orderType||'').toLowerCase().includes('take profit') || o.tpsl === 'tp');
+        if (tps.length){
+          // Pick the TP closest to entry (TP1):
+          // - short: highest trigger below entry
+          // - long: lowest trigger above entry
+          const entry = Number(state.entryPx);
+          const tp1 = side === 'short'
+            ? tps.slice().sort((a,b)=>Number(b.triggerPx)-Number(a.triggerPx))[0]
+            : tps.slice().sort((a,b)=>Number(a.triggerPx)-Number(b.triggerPx))[0];
+          const tp1Px = Number(tp1?.triggerPx || 0);
+          if (tp1Px > 0){
+            const inferred = side === 'short'
+              ? ((entry - tp1Px) / (r1 * entry))
+              : ((tp1Px - entry) / (r1 * entry));
+            if (Number.isFinite(inferred) && inferred > 0){
+              stopPct = inferred;
+              state.stopPct = inferred;
+              // If stopPx isn't set, derive it.
+              if (!(Number(state.stopPx) > 0)){
+                const delta = entry * inferred;
+                state.stopPx = side === 'long' ? (entry - delta) : (entry + delta);
+              }
+              persistState();
+            }
+          }
+        }
+      }
+    } catch {}
+
+    stopPct = Number(state.stopPct || 0);
+    if (!(stopPct > 0)){
+      state.lastActionAt = Date.now();
+      persistState();
+      return;
+    }
   }
 
   // If stopPx isn't set (older state), derive it from entryPx and stopPct.
