@@ -1,6 +1,6 @@
 {
   "halted": false,
-  "lastActionAt": 1771489766409,
+  "lastActionAt": 1771491791286,
   "backoffUntilMs": 1771244661482,
   "errStreak": 0,
   "exitsPlacedForPosKey": "short:66947.00:0.11643:0.001000",
@@ -15,5 +15,6 @@
   "tp1Done": false,
   "tp2Done": false,
   "lastSignalAtMs": 1771489406458,
-  "lastFillTimeMs": 1771489623605
+  "lastFillTimeMs": 1771491620998,
+  "lastLossAtMs": 1771491620998
 }

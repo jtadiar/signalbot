@@ -15,8 +15,16 @@ try {
   if (cfg?.telegram?.enabled && p) TG_TOKEN = fs.readFileSync(p, 'utf8').trim();
 } catch {}
 const TG_CHAT = cfg?.telegram?.channel || null;
+let _lastTgText = null;
+let _lastTgAtMs = 0;
 async function tgSend(text){
   if (!TG_TOKEN || !TG_CHAT) return;
+
+  // De-dupe: do not send identical messages twice within a short window.
+  // Protects against double-running bots / overlapping loops / transient cursor issues.
+  const now = Date.now();
+  if (text && _lastTgText === text && (now - _lastTgAtMs) < 2 * 60 * 1000) return;
+
   try {
     const url = `https://api.telegram.org/bot${TG_TOKEN}/sendMessage`;
     await fetch(url, {
@@ -24,6 +32,8 @@ async function tgSend(text){
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ chat_id: TG_CHAT, text, disable_web_page_preview: true }),
     });
+    _lastTgText = text;
+    _lastTgAtMs = now;
   } catch {}
 }
 
