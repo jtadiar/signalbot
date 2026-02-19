@@ -928,6 +928,7 @@ async function mainLoop(){
   if (now < state.backoffUntilMs) return;
   if ((now - state.lastActionAt) < (cfg.risk.cooldownSeconds*1000)) return;
 
+  console.log(nowIso(), 'polling', cfg.market.coin, '...');
   const dp = await dailyPnl();
   tauriEmit({ type: 'pnl', value: dp });
   if (dp < -Math.abs(cfg.risk.maxDailyLossUsd)){
