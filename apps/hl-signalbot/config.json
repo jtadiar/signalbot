@@ -20,7 +20,7 @@
     "maxStopPct": 0.035
   },
   "risk": {
-    "maxLeverage": 15,
+    "maxLeverage": 10,
     "maxDailyLossUsd": 200,
     "cooldownSeconds": 10,
     "riskPerTradePct": 0.03,
@@ -32,7 +32,7 @@
   },
   "exits": {
     "stopLossPct": 0.10,
-    "maxMarginLossPct": 0.015,
+    "maxMarginLossPct": 0.03,
     "trailToBreakevenOnTp1": true,
 
     "tp": [
