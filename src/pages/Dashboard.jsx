@@ -47,11 +47,17 @@ export default function Dashboard() {
     return unsub;
   }, []);
 
+  const [starting, setStarting] = useState(false);
+
   const handleToggle = useCallback(async () => {
     if (running) {
       await stopBot();
     } else {
-      await startBot();
+      setStarting(true);
+      setLastError(null);
+      const ok = await startBot();
+      setStarting(false);
+      if (!ok) setStatus('stopped');
     }
   }, [running]);
 
@@ -67,8 +73,8 @@ export default function Dashboard() {
             <span className="status-dot" />
             {statusLabel}
           </span>
-          <button className={`btn ${running ? 'btn-danger' : 'btn-primary'}`} onClick={handleToggle}>
-            {running ? 'Stop Bot' : 'Start Bot'}
+          <button className={`btn ${running ? 'btn-danger' : 'btn-primary'}`} onClick={handleToggle} disabled={starting}>
+            {starting ? 'Starting...' : running ? 'Stop Bot' : 'Start Bot'}
           </button>
         </div>
       </div>
@@ -101,6 +107,12 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {lastError && (
+        <div className="card" style={{ borderColor: 'var(--red)', background: 'var(--red-bg)', marginBottom: 16 }}>
+          <div style={{ color: 'var(--red)', fontWeight: 600, fontSize: 13 }}>Error: {lastError}</div>
+        </div>
+      )}
 
       <div className="grid-2">
         <div className="card">

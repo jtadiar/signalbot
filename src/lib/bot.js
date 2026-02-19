@@ -1,60 +1,50 @@
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
-let childProcess = null;
 let eventListeners = [];
+let unlisten = null;
 
 export function onBotEvent(callback) {
   eventListeners.push(callback);
-  return () => { eventListeners = eventListeners.filter(l => l !== callback); };
-}
 
-function emitEvent(event) {
-  eventListeners.forEach(cb => cb(event));
+  // Set up Tauri event listener on first subscriber
+  if (!unlisten) {
+    listen('bot-event', (event) => {
+      const raw = event.payload;
+      let parsed;
+      try {
+        parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      } catch {
+        parsed = { type: 'log', message: String(raw) };
+      }
+      eventListeners.forEach(cb => cb(parsed));
+    }).then(fn => { unlisten = fn; });
+  }
+
+  return () => {
+    eventListeners = eventListeners.filter(l => l !== callback);
+  };
 }
 
 export async function startBot() {
   try {
-    const { Command } = await import('@tauri-apps/plugin-shell');
-    const cmd = Command.create('node', ['./bot/index.mjs'], { env: { TAURI: '1' } });
-
-    cmd.stdout.on('data', (line) => {
-      try {
-        const event = JSON.parse(line);
-        emitEvent(event);
-      } catch {
-        emitEvent({ type: 'log', message: line });
-      }
-    });
-
-    cmd.stderr.on('data', (line) => {
-      emitEvent({ type: 'error', message: line });
-    });
-
-    cmd.on('close', (data) => {
-      emitEvent({ type: 'stopped', code: data.code });
-      invoke('set_bot_running', { running: false });
-      invoke('set_bot_pid', { pid: null });
-      childProcess = null;
-    });
-
-    childProcess = await cmd.spawn();
-    await invoke('set_bot_running', { running: true });
-    await invoke('set_bot_pid', { pid: childProcess.pid });
-    emitEvent({ type: 'started' });
+    await invoke('start_bot');
+    eventListeners.forEach(cb => cb({ type: 'started' }));
     return true;
   } catch (e) {
-    emitEvent({ type: 'error', message: e?.message || String(e) });
+    const msg = typeof e === 'string' ? e : e?.message || String(e);
+    eventListeners.forEach(cb => cb({ type: 'error', message: msg }));
     return false;
   }
 }
 
 export async function stopBot() {
-  if (childProcess) {
-    await childProcess.kill();
-    childProcess = null;
-    await invoke('set_bot_running', { running: false });
-    await invoke('set_bot_pid', { pid: null });
-    emitEvent({ type: 'stopped', code: 0 });
+  try {
+    await invoke('stop_bot');
+    eventListeners.forEach(cb => cb({ type: 'stopped', code: 0 }));
+  } catch (e) {
+    const msg = typeof e === 'string' ? e : e?.message || String(e);
+    eventListeners.forEach(cb => cb({ type: 'error', message: msg }));
   }
 }
 
