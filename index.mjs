@@ -167,6 +167,7 @@ function persistState(){
         lastSignalAtMs: state.lastSignalAtMs,
         lastFillTimeMs: state.lastFillTimeMs,
         lastLossAtMs: state.lastLossAtMs,
+        lastTrailAtMs: state.lastTrailAtMs,
       }, null, 2)
     );
   } catch {}
@@ -202,6 +203,9 @@ const state = {
 
   // loss cooldown
   lastLossAtMs: 0,
+
+  // trailing stop bookkeeping
+  lastTrailAtMs: 0,
 };
 
 const loaded = loadState();
@@ -300,8 +304,9 @@ async function cancelAllBtcOrders({ cancelStops=true, cancelTps=true } = {}){
   } catch {}
 }
 
-async function replaceStopToBreakeven({ side, entryPx, absSz }){
-  // Cancel existing stop(s) and place a new stop-market at breakeven for remaining size.
+async function replaceStop({ side, stopPx, absSz }){
+  // Cancel existing stop(s) and place a new stop-market at stopPx for remaining size.
+  // (Formerly replaceStopToBreakeven)
   try {
     const oo = await sdk.info.getFrontendOpenOrders(cfg.wallet.address, true);
     const coinPerp = `${cfg.market.coin}-PERP`;
@@ -310,7 +315,7 @@ async function replaceStopToBreakeven({ side, entryPx, absSz }){
       try { await sdk.exchange.cancelOrder(stops.map(o=>({ coin: coinPerp, o: o.oid }))); } catch {}
     }
 
-    const px = roundPx(cfg.market.coin, entryPx);
+    const px = roundPx(cfg.market.coin, stopPx);
     await sdk.exchange.placeOrder({
       coin: coinPerp,
       is_buy: side === 'short', // closing short is buy; closing long is sell
@@ -321,6 +326,11 @@ async function replaceStopToBreakeven({ side, entryPx, absSz }){
       grouping: 'positionTpsl',
     });
   } catch {}
+}
+
+// Backwards compatibility
+async function replaceStopToBreakeven({ side, entryPx, absSz }){
+  return replaceStop({ side, stopPx: entryPx, absSz });
 }
 
 async function fetchOHLC(symbol, interval, lookback){
@@ -529,26 +539,58 @@ async function manageOpenPosition(pos){
 
   const baseSz = Number(state.initialSz || absSz);
 
-  // Detect TP1 hit even when exits are handled natively by HL.
-  // If TP1 is hit, trail SL to breakeven (entryPx) if enabled.
+  // Detect TP hits even when exits are handled natively by HL.
+  // When TP1 is hit: optionally trail SL to breakeven (entryPx).
+  // When TP2 is hit: optionally trail SL to the TP1 price.
   try {
     const tp1 = Array.isArray(tpPlan) ? tpPlan[0] : null;
-    const tp1Frac = Number(tp1?.closeFrac || 0);
-    if (!state.tp1Done && tp1Frac > 0 && baseSz > 0){
-      const remainingFrac = absSz / baseSz;
-      // TP1 is considered done once remaining size is <= (1 - tp1Frac) + small epsilon
-      if (remainingFrac <= (1 - tp1Frac + 0.001)){
-        state.tp1Done = true;
-        persistState();
+    const tp2 = Array.isArray(tpPlan) ? tpPlan[1] : null;
 
-        if (cfg?.exits?.trailToBreakevenOnTp1){
-          // Only move the stop in the risk-reducing direction.
-          const bePx = Number(state.entryPx);
-          if (bePx > 0){
-            await replaceStopToBreakeven({ side, entryPx: bePx, absSz });
-            // Update our internal stop reference too.
-            state.stopPx = bePx;
-            persistState();
+    const tp1Frac = Number(tp1?.closeFrac || 0);
+    const tp2Frac = Number(tp2?.closeFrac || 0);
+
+    if (baseSz > 0){
+      const remainingFrac = absSz / baseSz;
+
+      // ---- TP1 done detection ----
+      if (!state.tp1Done && tp1Frac > 0){
+        // TP1 is considered done once remaining size is <= (1 - tp1Frac) + small epsilon
+        if (remainingFrac <= (1 - tp1Frac + 0.001)){
+          state.tp1Done = true;
+          persistState();
+
+          if (cfg?.exits?.trailToBreakevenOnTp1){
+            const bePx = Number(state.entryPx);
+            if (bePx > 0){
+              await replaceStop({ side, stopPx: bePx, absSz });
+              state.stopPx = bePx;
+              persistState();
+            }
+          }
+        }
+      }
+
+      // ---- TP2 done detection ----
+      const tp12Frac = tp1Frac + tp2Frac;
+      if (!state.tp2Done && tp12Frac > 0 && tp2Frac > 0){
+        if (remainingFrac <= (1 - tp12Frac + 0.001)){
+          state.tp2Done = true;
+          persistState();
+
+          if (cfg?.exits?.trailStopToTp1OnTp2){
+            const r1 = Number(tp1?.rMultiple || 0);
+            if (r1 > 0){
+              const tp1Px = tpPxFor({ side, entryPx: state.entryPx, stopPct, absSz, idx: 0, rMultiple: r1 });
+              if (tp1Px > 0){
+                const curStop = Number(state.stopPx || 0);
+                const better = (side === 'long') ? (tp1Px > curStop) : (curStop === 0 ? true : tp1Px < curStop);
+                if (better){
+                  await replaceStop({ side, stopPx: tp1Px, absSz });
+                  state.stopPx = tp1Px;
+                  persistState();
+                }
+              }
+            }
           }
         }
       }
@@ -582,6 +624,37 @@ async function manageOpenPosition(pos){
       }
     }
   }
+
+  // ---- Trailing stop (after TP2) ----
+  try {
+    const tr = cfg?.exits?.trailingAfterTp2;
+    const enabled = !!(tr && String(tr.enabled).toLowerCase() !== 'false');
+    if (enabled && state.tp2Done){
+      const kind = String(tr.kind || 'pct').toLowerCase();
+      const minUpdateSeconds = Number(tr.minUpdateSeconds ?? 20);
+      const now = Date.now();
+      if (!(Number.isFinite(minUpdateSeconds) && minUpdateSeconds >= 0) || (now - (state.lastTrailAtMs||0)) >= minUpdateSeconds*1000){
+        let candidate = null;
+        if (kind === 'pct'){
+          const trailPct = Number(tr.trailPct ?? 0);
+          if (trailPct > 0){
+            candidate = side === 'long' ? (px * (1 - trailPct)) : (px * (1 + trailPct));
+          }
+        }
+
+        if (candidate && candidate > 0){
+          const curStop = Number(state.stopPx || 0);
+          const improved = side === 'long' ? (candidate > curStop) : (curStop === 0 ? true : candidate < curStop);
+          if (improved){
+            await replaceStop({ side, stopPx: candidate, absSz });
+            state.stopPx = candidate;
+            state.lastTrailAtMs = now;
+            persistState();
+          }
+        }
+      }
+    }
+  } catch {}
 
   // ---- Stop-out: if price crosses stopPx, close remaining ----
   if ((side==='long' && px <= state.stopPx) || (side==='short' && px >= state.stopPx)){
