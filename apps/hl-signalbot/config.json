@@ -1,0 +1,56 @@
+{
+  "mode": "live",
+  "wallet": {
+    "address": "0xA3ca8F3D8A021C3570EAC36b63AB2B79DAc5E06c",
+    "privateKeyPath": "/Users/jt/.config/hyperliquid/private_key"
+  },
+  "market": {
+    "coin": "BTC"
+  },
+  "signal": {
+    "pollMs": 20000,
+    "timeframe": {
+      "trend": "1h",
+      "trigger": "15m"
+    },
+    "emaTrendPeriod": 50,
+    "emaTriggerPeriod": 20,
+    "atrPeriod": 14,
+    "atrMult": 1.5,
+    "maxStopPct": 0.035
+  },
+  "risk": {
+    "maxLeverage": 15,
+    "maxDailyLossUsd": 200,
+    "cooldownSeconds": 10,
+    "riskPerTradePct": 0.03,
+    "marginUsePct": 0.75,
+    "minHoldSeconds": 120,
+    "reentryCooldownSeconds": 300,
+    "lossCooldownMinutes": 30,
+    "atrMinPct": 0.002
+  },
+  "exits": {
+    "stopLossPct": 0.10,
+    "maxMarginLossPct": 0.015,
+    "trailToBreakevenOnTp1": true,
+    "tp": [
+      {"rMultiple": 1, "closeFrac": 0.25},
+      {"rMultiple": 2, "closeFrac": 0.25},
+      {"rMultiple": 3, "closeFrac": 0.25}
+    ],
+    "runnerCloseFrac": 0.25,
+    "runnerExit": "signal"
+  },
+  "execution": {
+    "orderType": "taker"
+  },
+  "sdk": {
+    "disableAssetMapRefresh": true
+  },
+  "telegram": {
+    "enabled": true,
+    "channel": "@hyperpings",
+    "tokenPath": "/Users/jt/.config/hyperpings/bot_token"
+  }
+}
