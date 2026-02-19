@@ -299,6 +299,24 @@ function computeRiskSizedNotional({ equityUsd, stopPct }){
   return { riskUsd, notional };
 }
 
+function tpPxFor({ side, entryPx, stopPct, absSz, idx, rMultiple }){
+  const byR = side === 'long'
+    ? (entryPx * (1 + rMultiple * stopPct))
+    : (entryPx * (1 - rMultiple * stopPct));
+
+  const mins = Array.isArray(cfg?.exits?.tpMinUsd) ? cfg.exits.tpMinUsd : [];
+  const minUsd = Number(mins?.[idx] ?? NaN);
+  if (!(Number.isFinite(minUsd) && minUsd > 0 && Number.isFinite(absSz) && absSz > 0)) return byR;
+
+  // Approximate move needed to realize minUsd (ignores fees; still a big improvement over $1-3 TP1)
+  const move = minUsd / absSz;
+  const byUsd = side === 'long' ? (entryPx + move) : (entryPx - move);
+
+  // Choose the more conservative target (further away) to ensure minimum dollar profit.
+  // For longs: higher price is further away; for shorts: lower price is further away.
+  return side === 'long' ? Math.max(byR, byUsd) : Math.min(byR, byUsd);
+}
+
 async function manageOpenPosition(pos){
   const side = pos.szi > 0 ? 'long' : 'short';
   const px = await midPx();
@@ -397,9 +415,7 @@ async function manageOpenPosition(pos){
         const frac = Number(t.closeFrac || 0);
         if (!(r > 0) || !(frac > 0)) continue;
 
-        const tpPx = side === 'long'
-          ? (state.entryPx * (1 + r * stopPct))
-          : (state.entryPx * (1 - r * stopPct));
+        const tpPx = tpPxFor({ side, entryPx: state.entryPx, stopPct, absSz, idx: i, rMultiple: r });
 
         const tpSz = Math.min(absSz, Number(state.initialSz || absSz) * frac);
         if (tpPx > 0 && tpSz > 0){
@@ -509,9 +525,7 @@ async function manageOpenPosition(pos){
       const doneKey = i === 0 ? 'tp1Done' : i === 1 ? 'tp2Done' : `tp${i+1}Done`;
       if (state[doneKey]) continue;
 
-      const targetPx = side === 'long'
-        ? (state.entryPx * (1 + r * stopPct))
-        : (state.entryPx * (1 - r * stopPct));
+      const targetPx = tpPxFor({ side, entryPx: state.entryPx, stopPct, absSz, idx: i, rMultiple: r });
 
       const hit = side === 'long' ? (px >= targetPx) : (px <= targetPx);
       if (!hit) continue;
