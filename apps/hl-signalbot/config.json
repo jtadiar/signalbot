@@ -34,11 +34,11 @@
     "stopLossPct": 0.10,
     "maxMarginLossPct": 0.03,
     "trailToBreakevenOnTp1": true,
+    "trailStopToTp1OnTp2": true,
 
     "tp": [
-      {"rMultiple": 1, "closeFrac": 0.25},
       {"rMultiple": 2, "closeFrac": 0.25},
-      {"rMultiple": 3, "closeFrac": 0.25}
+      {"rMultiple": 4, "closeFrac": 0.25}
     ],
 
     "tpMinUsd": [10, 25, 60],

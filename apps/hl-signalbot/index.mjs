@@ -528,26 +528,64 @@ async function manageOpenPosition(pos){
 
   const baseSz = Number(state.initialSz || absSz);
 
-  // Detect TP1 hit even when exits are handled natively by HL.
-  // If TP1 is hit, trail SL to breakeven (entryPx) if enabled.
+  // Detect TP hits even when exits are handled natively by HL.
+  // When TP1 is hit: optionally trail SL to breakeven (entryPx).
+  // When TP2 is hit: optionally trail SL up/down to the TP1 price.
   try {
     const tp1 = Array.isArray(tpPlan) ? tpPlan[0] : null;
-    const tp1Frac = Number(tp1?.closeFrac || 0);
-    if (!state.tp1Done && tp1Frac > 0 && baseSz > 0){
-      const remainingFrac = absSz / baseSz;
-      // TP1 is considered done once remaining size is <= (1 - tp1Frac) + small epsilon
-      if (remainingFrac <= (1 - tp1Frac + 0.001)){
-        state.tp1Done = true;
-        persistState();
+    const tp2 = Array.isArray(tpPlan) ? tpPlan[1] : null;
 
-        if (cfg?.exits?.trailToBreakevenOnTp1){
-          // Only move the stop in the risk-reducing direction.
-          const bePx = Number(state.entryPx);
-          if (bePx > 0){
-            await replaceStopToBreakeven({ side, entryPx: bePx, absSz });
-            // Update our internal stop reference too.
-            state.stopPx = bePx;
-            persistState();
+    const tp1Frac = Number(tp1?.closeFrac || 0);
+    const tp2Frac = Number(tp2?.closeFrac || 0);
+
+    if (baseSz > 0){
+      const remainingFrac = absSz / baseSz;
+
+      // ---- TP1 done detection ----
+      if (!state.tp1Done && tp1Frac > 0){
+        // TP1 is considered done once remaining size is <= (1 - tp1Frac) + small epsilon
+        if (remainingFrac <= (1 - tp1Frac + 0.001)){
+          state.tp1Done = true;
+          persistState();
+
+          if (cfg?.exits?.trailToBreakevenOnTp1){
+            // Only move the stop in the risk-reducing direction.
+            const bePx = Number(state.entryPx);
+            if (bePx > 0){
+              await replaceStopToBreakeven({ side, entryPx: bePx, absSz });
+              // Update our internal stop reference too.
+              state.stopPx = bePx;
+              persistState();
+            }
+          }
+        }
+      }
+
+      // ---- TP2 done detection ----
+      // We treat TP2 as done once remaining size is <= 1 - (tp1Frac + tp2Frac)
+      // (i.e. the first two partial closes have happened).
+      const tp12Frac = tp1Frac + tp2Frac;
+      if (!state.tp2Done && tp12Frac > 0 && tp2Frac > 0){
+        if (remainingFrac <= (1 - tp12Frac + 0.001)){
+          state.tp2Done = true;
+          persistState();
+
+          if (cfg?.exits?.trailStopToTp1OnTp2){
+            const r1 = Number(tp1?.rMultiple || 0);
+            if (r1 > 0){
+              const tp1Px = tpPxFor({ side, entryPx: state.entryPx, stopPct, absSz, idx: 0, rMultiple: r1 });
+              if (tp1Px > 0){
+                // Only move the stop in the risk-reducing direction.
+                // For a long, raising stop helps; for a short, lowering stop helps.
+                const curStop = Number(state.stopPx || 0);
+                const better = (side === 'long') ? (tp1Px > curStop) : (curStop === 0 ? true : tp1Px < curStop);
+                if (better){
+                  await replaceStopToBreakeven({ side, entryPx: tp1Px, absSz });
+                  state.stopPx = tp1Px;
+                  persistState();
+                }
+              }
+            }
           }
         }
       }
