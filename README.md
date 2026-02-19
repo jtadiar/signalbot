@@ -26,10 +26,12 @@ The signal engine uses two timeframes and three indicators:
 3. **Stop sizing:** Stop distance = ATR x multiplier (default 1.5), capped at `maxStopPct`.
 
 **Exit logic:**
-- **Take-profit ladder:** Three R-multiple targets (1R, 2R, 3R), each closing 25% of the position.
-- **Breakeven trail:** After TP1 is hit, the stop-loss moves to breakeven.
+- **Take-profit ladder:** Two R-multiple targets (default **2R** and **4R**), each closing **25%** of the original position, leaving ~**50% runner**.
+- **Stop movement after TP1:** After TP1 is hit, the stop-loss moves to **breakeven** (entry price).
+- **Stop movement after TP2:** After TP2 is hit, the stop-loss moves to the **TP1 price** (locks in profit on the runner).
+- **Trailing stop (runner):** After TP2, the bot can trail the stop for the remaining runner by a configurable percentage.
 - **Stop-loss:** ATR-sized, placed as a native Hyperliquid trigger order.
-- **Runner exit:** Optionally closes on an opposite signal.
+- **Runner exit (optional):** Can also close the remaining runner on an opposite signal.
 
 All TP/SL orders are placed as **native Hyperliquid trigger orders** so they appear in the Hyperliquid UI and execute even if the bot goes offline.
 
