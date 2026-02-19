@@ -1,190 +1,270 @@
 # PRD — HL Signalbot (OpenClaw + Hyperliquid)
 
+> Audience: This PRD is written to be **implementation-ready** for Cursor / an AI IDE.
+> It defines a product that is:
+> - a **hosted web app** (dashboard + docs)
+> - plus a **downloadable local runner package** that executes trades on the user’s machine
+> - with the user’s **private key never leaving their device**.
+
+---
+
 ## 1) Summary
 
-HL Signalbot is a **single-purpose, CLI-run trading bot** designed to be used inside an **OpenClaw workspace**, trading **Hyperliquid perpetuals** (initially BTC-PERP) based on a deterministic, transparent signal.
+HL Signalbot is a single-purpose Hyperliquid perpetuals signal-trading bot (initially `BTC-PERP`) designed to be run in the OpenClaw ecosystem.
 
-The bot:
-- computes a signal from OHLC data (EMA trend + EMA trigger + ATR-sized stop),
-- opens a position using Hyperliquid’s API,
-- places native Hyperliquid **TP/SL trigger orders** (so users can see them in the HL UI),
-- manages the open position (TP ladder, optional runner exit),
-- sends **Telegram pings** for opens/closes/TP/SL,
-- enforces risk constraints (max leverage, daily loss halt, cooldowns).
+The product ships as **two cooperating components**:
 
-This is **not** a framework and **not** a collection of bots. It is one bot that anyone can clone and run with OpenClaw.
+1) **Hosted Web App (Dashboard)**
+- Marketing site + docs + onboarding
+- User account
+- Bot configuration UI (risk, telegram, strategy parameters)
+- Shows status, trade history, PnL summaries
+- Issues authenticated “jobs” to the local runner
+
+2) **Local Runner (Downloadable Package / Agent)**
+- Runs on the user’s machine (the same box as their OpenClaw workspace, or any machine)
+- Holds the Hyperliquid **private key locally**
+- Executes all trades via Hyperliquid API
+- Sends Telegram pings
+- Reports status/telemetry back to hosted dashboard
+
+This repo currently contains the Local Runner (Node.js) and documentation. The PRD below expands requirements to ship the full product.
 
 ---
 
 ## 2) Goals
 
 ### Primary goals
-- Provide a reliable, reproducible Hyperliquid trading bot with a clean CLI.
-- Make setup safe and simple: users should only need to add wallet/key + optional Telegram token.
-- Use OpenClaw conventions: repository-friendly, minimal external dependencies, sane defaults.
-- Provide strong guardrails: daily loss halt, leverage caps, stop sizing, cooldowns.
+- **Non-developer friendly** onboarding: guided setup, minimal terminal use.
+- **Security-first**: private keys remain local; secrets stored in OS keychain.
+- Deterministic, transparent signal logic (EMA/ATR baseline) with strong guardrails.
+- One-bot product (not a framework, not multiple bots).
+- Telegram pings for opens/closes/TP/SL.
 
-### Non-goals
-- No LLM usage required (no OpenAI keys).
-- No multi-exchange support.
+### Non-goals (v1)
+- No custody (we do not hold user keys).
+- No multi-exchange.
+- No social trading / copy trading.
 - No complex portfolio management.
-- No UI dashboard in v1.
 
 ---
 
 ## 3) Target users
 
-- OpenClaw users who want an automated Hyperliquid bot with transparent logic.
-- Builders who want a starting point that’s easy to audit and modify.
+- Non-developers who can follow step-by-step instructions.
+- OpenClaw users who want a Hyperliquid bot with transparent logic.
 
 ---
 
-## 4) User stories
+## 4) Critical user story (end-to-end)
 
-1. **As a user**, I can clone the repo into my OpenClaw workspace and run one command to start the bot.
-2. **As a user**, I can configure my wallet + private key securely via environment variables and/or local secret files.
-3. **As a user**, I can receive Telegram pings for every open and close, including net PnL.
-4. **As a user**, I can adjust risk (leverage, daily loss, stop sizing, cooldowns) via config.
-5. **As a user**, I can stop the bot safely and restart without losing track of state.
-
----
-
-## 5) Product requirements
-
-### 5.1 CLI
-
-**Command:** `hl-signalbot`
-
-**Must support:**
-- `--config <path>`: path to config JSON (defaults to `apps/hl-signalbot/config.json` or `process.env.CONFIG`).
-- `--once` (optional v1.1): run one loop iteration then exit.
-- `--dry-run` (optional v1.1): compute signals and log actions without placing orders.
-
-**Exit codes:**
-- `0` normal exit (when `--once`)
-- `1` config/secret validation error
-
-### 5.2 Configuration
-
-Config is a JSON file with sections:
-- `market`: coin/symbol
-- `signal`: candle fetch parameters + EMA/ATR settings
-- `risk`: leverage cap, daily loss halt, cooldowns, sizing
-- `exits`: TP ladder, stop constraints, runner exit
-- `telegram`: ping channel config
-
-**Env overrides (required):**
-- Wallet address override: `HL_WALLET_ADDRESS`
-- Private key override: `HL_PRIVATE_KEY` or `HL_PRIVATE_KEY_PATH`
-
-**Telegram env overrides (optional):**
-- `TG_ENABLED`
-- `TG_CHAT`
-- `TG_TOKEN` or `TG_TOKEN_PATH`
-
-### 5.3 Trading behavior
-
-**Entry:**
-- Polls market every `signal.pollMs`.
-- Pulls OHLC for trigger timeframe (default 15m) and trend timeframe (default 1h).
-- Computes a directional signal (long/short) and stop distance.
-- Sizes position according to one of:
-  - risk-based sizing (notional based on stopPct)
-  - margin-use sizing (`risk.marginUsePct`)
-
-**Exit:**
-- Places native TP/SL orders on Hyperliquid.
-- TP ladder defined by `exits.tp[]` with R multiples and close fractions.
-- Optional runner logic: close remaining on opposite signal.
-
-**Risk controls:**
-- Halt trading if daily PnL < `-maxDailyLossUsd`.
-- Enforce `risk.maxLeverage`.
-- Enforce loss cooldown `risk.lossCooldownMinutes` after a net losing close.
-- Optional re-entry cooldown `risk.reentryCooldownSeconds` after any exit.
-
-### 5.4 Telegram pings
-
-**Required message types:**
-- OPEN: side, size, entry price, stop, TP ladder summary
-- CLOSE: direction, size, exit price, net PnL (closedPnl - fee), timestamp
-
-**Anti-spam:**
-- Deduplicate identical messages within a short window.
-
-### 5.5 State persistence
-
-State file should persist:
-- last action timestamps
-- last exit timestamps
-- loss timestamp (`lastLossAtMs`)
-- whether TP1/TP2 has been hit
-- cursor for fills pinging
-
-**Constraints:**
-- State must not contain secrets.
-- State should be ignored by git.
+**As a new user**, I can:
+1) visit the hosted dashboard
+2) create an account
+3) download the local runner for my OS
+4) run a guided setup wizard (UI or CLI)
+5) enter my wallet address + private key locally (never uploaded)
+6) connect Telegram pings
+7) deposit USDC to Hyperliquid / fund my trading account
+8) click “Start” and see the bot trade + ping Telegram
 
 ---
 
-## 6) Security requirements
+## 5) Product requirements (Hosted Web App)
 
-### 6.1 Secrets handling
-- Do not store private keys or Telegram tokens in tracked files.
-- Support env var injection for all secrets.
-- If a secret is provided via a file path, recommend `chmod 600`.
+### 5.1 Core pages
 
-### 6.2 Operational safety
-- Fail fast if required secrets are missing.
-- Print clear setup errors without leaking secrets.
-- Avoid writing sensitive data to logs.
+- **Landing**: what it does, risk disclaimers, screenshots.
+- **Docs**: setup guides by OS, troubleshooting.
+- **Dashboard**:
+  - runner connection status (connected/disconnected, last heartbeat)
+  - current position summary
+  - open orders (TP/SL)
+  - last signal + reason
+  - daily PnL and max daily loss line
+  - trade history (open/close events)
+- **Settings**:
+  - strategy params (EMA periods, ATR, maxStopPct)
+  - risk params (max leverage, maxDailyLossUsd, cooldowns)
+  - telegram config (chat + token management UX; token ultimately stored locally)
 
-### 6.3 Trading safety
-- Always place protective TP/SL after entry; if protection placement fails, close position (best effort).
-- Cap leverage and daily loss.
+### 5.2 Auth & sessions
 
----
+- Email/password or magic link (implementation choice).
+- All server-issued commands to the runner must be authenticated.
 
-## 7) Observability requirements
+### 5.3 Runner pairing
 
-- Console logs for:
-  - startup config summary (non-secret)
-  - every decision: signal/no signal
-  - every order action and response status (no secrets)
-  - halt events and cooldown triggers
+- Runner generates a short-lived pairing code.
+- User enters pairing code in the web app.
+- Server returns a signed token; runner stores it locally.
 
-- Optional (future): JSONL event log for opens/closes.
+### 5.4 Telemetry & data model
 
----
+Server stores (non-secret):
+- runner device id, last seen
+- bot config (non-secret)
+- trade events: OPEN/CLOSE, timestamp, coin, side, size, entry/exit px, net pnl
+- health events: HALT, ERROR streak, backoff
 
-## 8) Distribution requirements
-
-Repository must include:
-- `apps/hl-signalbot/README.md` with setup instructions
-- `apps/hl-signalbot/.env.example`
-- `apps/hl-signalbot/.gitignore` (ignore state + secrets)
-- clean CLI entrypoint (`cli.mjs`) and package scripts (`npm start`)
-
----
-
-## 9) Acceptance criteria
-
-- A new user can:
-  1) clone repo into OpenClaw workspace
-  2) run `npm ci`
-  3) set secrets via `.env`
-  4) start bot with `npm start`
-  5) observe Telegram pings on open/close
-
-- No secrets are stored in git-tracked files.
-- Bot halts when max daily loss is exceeded.
+No private keys or Telegram bot tokens are stored server-side.
 
 ---
 
-## 10) Out of scope (future)
+## 6) Product requirements (Local Runner)
 
-- Multi-coin support
-- Web UI/dashboard
-- Backtesting suite
-- Strategies beyond EMA/ATR baseline
-- Unit/integration tests
+### 6.1 Distribution
+
+Provide downloadable builds for:
+- macOS (arm64 + x64 if needed)
+- Windows
+- Linux
+
+Acceptable packaging options (pick one):
+- Node.js + `pkg`/`nexe` single binary
+- Electron/Tauri “Runner App” (tray app) — optional in v1
+- A simple `npm` install is allowed for developer mode, but **must not be the primary non-dev path**.
+
+### 6.2 Setup UX (must be non-dev friendly)
+
+The runner must provide a setup wizard:
+
+- **GUI wizard** (preferred) served on `http://localhost:<port>` and opened automatically, OR a Tauri/Electron wizard.
+- Minimal CLI fallback: `hl-signalbot setup`.
+
+Wizard flow:
+1) Choose coin (default BTC)
+2) Enter wallet address
+3) Enter private key (masked)
+4) Choose secret storage: OS keychain (default)
+5) Telegram pings setup (optional)
+6) Risk controls (max leverage, max daily loss)
+7) Confirm → start runner
+
+### 6.3 Secret storage
+
+- Store secrets in OS keychain/credential vault:
+  - macOS Keychain
+  - Windows Credential Manager
+  - Linux Secret Service / libsecret (fallback to encrypted local file with a user-chosen passphrase)
+
+Secrets:
+- Hyperliquid private key
+- Telegram bot token (if used)
+- Runner auth token for dashboard
+
+### 6.4 Runner API (local)
+
+Runner exposes a local API for:
+- start/stop
+- status
+- logs tail
+- update config
+
+This can be:
+- localhost HTTP server with a local-only origin, plus CSRF protection, OR
+- IPC if using a desktop shell.
+
+### 6.5 Trading logic
+
+Entry/exit logic remains as in current code:
+- EMA/ATR-based signal
+- Places native TP/SL triggers on HL
+- Cooldowns:
+  - after loss: `lossCooldownMinutes`
+  - after any exit: `reentryCooldownSeconds`
+- daily loss halt
+
+### 6.6 Telegram pings
+
+Runner must support Telegram pings:
+- OPEN
+- TP/CLOSE
+- STOP/LOSS
+
+Telegram must be configurable in the wizard.
+
+---
+
+## 7) Funding / USDC deposit instructions (required in docs)
+
+Docs must include a clear, step-by-step section explaining funding:
+
+- The bot trades perps and needs margin.
+- User must have **USDC available for trading on Hyperliquid**.
+- Instructions should cover:
+  1) Use the same wallet address the runner is configured with.
+  2) Deposit/bridge USDC to the correct chain/network used by Hyperliquid.
+  3) Transfer USDC into the Hyperliquid trading account / margin account (as per HL UI).
+  4) Confirm equity is visible before starting the bot.
+
+> Note: exact UI steps may change; docs should be written to be resilient and include screenshots/video links when possible.
+
+---
+
+## 8) Security requirements
+
+- Private keys never leave the device.
+- Hosted dashboard never receives keys or Telegram tokens.
+- No secrets committed to git.
+- Strong risk guardrails enabled by default:
+  - maxDailyLossUsd
+  - max leverage
+  - mandatory protective TP/SL after entry (close position if cannot place protection)
+- Prevent double-running against the same wallet (process lock).
+
+---
+
+## 9) Observability requirements
+
+Runner must produce:
+- human-readable logs
+- structured event log (JSONL)
+
+Dashboard must show:
+- last heartbeat
+- last error
+- last trade
+
+---
+
+## 10) Acceptance criteria
+
+A non-technical user can:
+- install the runner on macOS/Windows
+- complete setup wizard
+- fund Hyperliquid with USDC
+- start bot
+- see Telegram pings
+- view trade history in dashboard
+
+---
+
+## 11) Implementation plan (instructions for Cursor / AI IDE)
+
+Build in this order:
+
+1) **Runner hardening**
+- add process lock
+- add `setup` command
+- add keychain storage
+- add `status` and `stop`
+
+2) **Local setup UI**
+- serve local wizard (React/Vite or minimal HTML)
+- write settings + secrets to keychain
+
+3) **Hosted dashboard**
+- auth
+- pairing
+- status ingestion
+- config publishing
+
+4) **Packaging**
+- build installers / binaries per OS
+- signing (macOS notarization, Windows signing) if distributing widely
+
+5) **Docs**
+- include USDC funding instructions
+- include Telegram setup
+- add troubleshooting and safe defaults
