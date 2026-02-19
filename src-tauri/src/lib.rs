@@ -30,6 +30,48 @@ fn validate_license(key: String) -> Result<bool, String> {
     Ok(true)
 }
 
+fn find_project_root(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    // In dev, cwd is the project root. In production, look relative to the binary.
+    let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
+    if cwd.join("bot/index.mjs").exists() {
+        return Ok(cwd);
+    }
+    let resource_dir = app.path().resource_dir().map_err(|e| e.to_string())?;
+    for ancestor in resource_dir.ancestors() {
+        if ancestor.join("bot/index.mjs").exists() {
+            return Ok(ancestor.to_path_buf());
+        }
+    }
+    Err(format!("Cannot find bot/index.mjs from cwd={} or resources={}", cwd.display(), resource_dir.display()))
+}
+
+#[tauri::command]
+fn get_bot_dir(app: tauri::AppHandle) -> Result<String, String> {
+    let root = find_project_root(&app)?;
+    Ok(root.join("bot").to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn write_bot_file(app: tauri::AppHandle, filename: String, contents: String) -> Result<(), String> {
+    let root = find_project_root(&app)?;
+    let path = root.join("bot").join(&filename);
+    std::fs::write(&path, &contents).map_err(|e| format!("Failed to write {}: {}", path.display(), e))
+}
+
+#[tauri::command]
+fn read_bot_file(app: tauri::AppHandle, filename: String) -> Result<String, String> {
+    let root = find_project_root(&app)?;
+    let path = root.join("bot").join(&filename);
+    std::fs::read_to_string(&path).map_err(|e| format!("Failed to read {}: {}", path.display(), e))
+}
+
+#[tauri::command]
+fn bot_file_exists(app: tauri::AppHandle, filename: String) -> bool {
+    find_project_root(&app)
+        .map(|root| root.join("bot").join(&filename).exists())
+        .unwrap_or(false)
+}
+
 #[tauri::command]
 fn start_bot(app: tauri::AppHandle, state: State<BotState>) -> Result<(), String> {
     let mut running = state.running.lock().unwrap();
@@ -37,19 +79,7 @@ fn start_bot(app: tauri::AppHandle, state: State<BotState>) -> Result<(), String
         return Err("Bot is already running".into());
     }
 
-    let resource_dir = app.path().resource_dir().map_err(|e| e.to_string())?;
-    let bot_dir = resource_dir.parent().unwrap_or(&resource_dir);
-
-    // In dev mode, the resource dir is inside src-tauri, so walk up to project root
-    let project_root = if bot_dir.join("bot").exists() {
-        bot_dir.to_path_buf()
-    } else if bot_dir.join("../../bot").exists() {
-        bot_dir.join("../..").canonicalize().unwrap_or(bot_dir.to_path_buf())
-    } else {
-        // Fall back to current working directory
-        std::env::current_dir().unwrap_or(bot_dir.to_path_buf())
-    };
-
+    let project_root = find_project_root(&app)?;
     let bot_script = project_root.join("bot/index.mjs");
     if !bot_script.exists() {
         return Err(format!("Bot script not found at: {}", bot_script.display()));
@@ -89,16 +119,23 @@ fn start_bot(app: tauri::AppHandle, state: State<BotState>) -> Result<(), String
         });
     }
 
-    // Stream stderr in a background thread
+    // Stream stderr in a background thread — accumulate lines into a single error
     if let Some(err) = stderr {
         let h = handle.clone();
         std::thread::spawn(move || {
             let reader = BufReader::new(err);
+            let mut error_lines: Vec<String> = Vec::new();
             for line in reader.lines() {
                 if let Ok(text) = line {
-                    let payload = format!("{{\"type\":\"error\",\"message\":\"{}\"}}", text.replace('"', "\\\""));
-                    let _ = h.emit("bot-event", &payload);
+                    error_lines.push(text.clone());
+                    // Also emit as log so it appears in the log panel
+                    let _ = h.emit("bot-event", &format!("{{\"type\":\"log\",\"message\":\"{}\"}}", text.replace('"', "\\\"")));
                 }
+            }
+            // When stderr closes, emit the full accumulated error
+            if !error_lines.is_empty() {
+                let full_error = error_lines.join(" | ").replace('"', "\\\"");
+                let _ = h.emit("bot-event", &format!("{{\"type\":\"error\",\"message\":\"{}\"}}", full_error));
             }
         });
     }
@@ -160,6 +197,10 @@ pub fn run() {
             validate_license,
             start_bot,
             stop_bot,
+            get_bot_dir,
+            write_bot_file,
+            read_bot_file,
+            bot_file_exists,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

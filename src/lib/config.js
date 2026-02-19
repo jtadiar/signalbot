@@ -1,11 +1,8 @@
-const CONFIG_PATH = 'bot/config.json';
-const CONFIG_EXAMPLE_PATH = 'bot/config.example.json';
-const ENV_PATH = 'bot/.env';
+import { invoke } from '@tauri-apps/api/core';
 
 export async function readConfig() {
   try {
-    const { readTextFile } = await import('@tauri-apps/plugin-fs');
-    const text = await readTextFile(CONFIG_PATH, { baseDir: 11 }); // AppResource
+    const text = await invoke('read_bot_file', { filename: 'config.json' });
     return JSON.parse(text);
   } catch {
     return null;
@@ -13,38 +10,24 @@ export async function readConfig() {
 }
 
 export async function writeConfig(config) {
-  const { writeTextFile } = await import('@tauri-apps/plugin-fs');
-  await writeTextFile(CONFIG_PATH, JSON.stringify(config, null, 2), { baseDir: 11 });
-}
-
-export async function readConfigExample() {
-  try {
-    const { readTextFile } = await import('@tauri-apps/plugin-fs');
-    const text = await readTextFile(CONFIG_EXAMPLE_PATH, { baseDir: 11 });
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
+  await invoke('write_bot_file', { filename: 'config.json', contents: JSON.stringify(config, null, 2) });
 }
 
 export async function configExists() {
   try {
-    const { exists } = await import('@tauri-apps/plugin-fs');
-    return await exists(CONFIG_PATH, { baseDir: 11 });
+    return await invoke('bot_file_exists', { filename: 'config.json' });
   } catch {
     return false;
   }
 }
 
-export async function writeEnv(lines) {
-  const { writeTextFile } = await import('@tauri-apps/plugin-fs');
-  await writeTextFile(ENV_PATH, lines.join('\n'), { baseDir: 11 });
+export async function writeEnv(content) {
+  await invoke('write_bot_file', { filename: '.env', contents: content });
 }
 
 export async function readTradeLog() {
   try {
-    const { readTextFile } = await import('@tauri-apps/plugin-fs');
-    const text = await readTextFile('bot/trades.jsonl', { baseDir: 11 });
+    const text = await invoke('read_bot_file', { filename: 'trades.jsonl' });
     return text.trim().split('\n').filter(Boolean).map(line => {
       try { return JSON.parse(line); } catch { return null; }
     }).filter(Boolean).reverse();
