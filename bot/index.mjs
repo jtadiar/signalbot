@@ -17,8 +17,13 @@ const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
 // Prefer injecting secrets via env rather than editing tracked files.
 if (process.env.HL_WALLET_ADDRESS) cfg.wallet.address = String(process.env.HL_WALLET_ADDRESS).trim();
 
+import { homedir } from 'os';
+function expandHome(p) {
+  if (p && p.startsWith('~/')) return p.replace('~', homedir());
+  return p;
+}
 function readSecretFromPath(p){
-  try { return fs.readFileSync(p, 'utf8').trim(); } catch { return null; }
+  try { return fs.readFileSync(expandHome(p), 'utf8').trim(); } catch { return null; }
 }
 
 const pk = (

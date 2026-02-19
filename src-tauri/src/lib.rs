@@ -80,16 +80,21 @@ fn start_bot(app: tauri::AppHandle, state: State<BotState>) -> Result<(), String
     }
 
     let project_root = find_project_root(&app)?;
-    let bot_script = project_root.join("bot/index.mjs");
+    let bot_script = project_root.join("bot/cli.mjs");
     if !bot_script.exists() {
         return Err(format!("Bot script not found at: {}", bot_script.display()));
     }
 
+    let config_path = project_root.join("bot/config.json");
+    if !config_path.exists() {
+        return Err("bot/config.json not found. Run setup first.".into());
+    }
+
     let mut child = StdCommand::new("node")
         .arg(bot_script.to_str().unwrap())
+        .arg("--config")
+        .arg(config_path.to_str().unwrap())
         .env("TAURI", "1")
-        .env("DOTENV_CONFIG_PATH", project_root.join("bot/.env").to_str().unwrap_or(""))
-        .env("CONFIG", project_root.join("bot/config.json").to_str().unwrap_or(""))
         .current_dir(&project_root.join("bot"))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
