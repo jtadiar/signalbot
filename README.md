@@ -155,6 +155,27 @@ All fields in `config.json` / `config.example.json`:
 | `runnerCloseFrac` | `0.25` | Fraction of position for runner exit (if using runner exit mode) |
 | `runnerExit` | `"signal"` | Exit method for remaining position (`"signal"` or `null`) |
 
+#### Trailing stop tuning (how to tighten / loosen)
+
+After **TP2** is hit, the bot can start trailing the stop for the remaining runner.
+
+The key parameter is:
+
+- `exits.trailingAfterTp2.trailPct`
+
+Examples (BTC):
+- `0.0025` = **0.25%** trailing distance (tighter; locks profit faster; more likely to get stopped on bounces)
+- `0.005` = **0.50%** trailing distance (balanced default)
+- `0.008` = **0.80%** trailing distance (looser; gives trend more room; larger giveback)
+
+How to interpret “tight vs loose”:
+- **Tighten** the trailing stop (smaller `trailPct`) if you’re happy taking profit earlier and you often see sharp snap-backs after TP2.
+- **Loosen** the trailing stop (larger `trailPct`) if you keep getting stopped out on normal pullbacks but the trend continues.
+
+Also consider these interactions:
+- If you lower leverage / position size, it becomes psychologically easier to use a **looser** trailing stop.
+- If BTC is extremely volatile, you generally need a **looser** trail.
+
 ### `display`
 
 | Field | Default | Description |
