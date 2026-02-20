@@ -1,4 +1,6 @@
 import fs from 'fs';
+import path from 'path';
+import { homedir } from 'os';
 import { Hyperliquid } from 'hyperliquid';
 import { computeSignal } from './signal_engine.mjs';
 import { candleSnapshot, allMids, spotClearinghouseState } from './hl_info.mjs';
@@ -9,15 +11,25 @@ function tauriEmit(evt) {
   try { process.stdout.write(JSON.stringify(evt) + '\n'); } catch {}
 }
 
-const CONFIG_PATH = process.env.CONFIG || new URL('./config.json', import.meta.url).pathname;
-const TRADE_LOG = process.env.TRADE_LOG || new URL('./trades.jsonl', import.meta.url).pathname;
+const DATA_DIR = process.env.DATA_DIR || path.join(homedir(), '.config', 'hl-signalbot');
+fs.mkdirSync(DATA_DIR, { recursive: true });
+// Migrate data files from old bot/ location to DATA_DIR if needed
+const BOT_DIR = new URL('./', import.meta.url).pathname;
+for (const file of ['config.json', 'trades.jsonl', 'state.json', '.env']) {
+  const oldPath = path.join(BOT_DIR, file);
+  const newPath = path.join(DATA_DIR, file);
+  if (fs.existsSync(oldPath) && !fs.existsSync(newPath)) {
+    try { fs.copyFileSync(oldPath, newPath); } catch {}
+  }
+}
+const CONFIG_PATH = process.env.CONFIG || path.join(DATA_DIR, 'config.json');
+const TRADE_LOG = process.env.TRADE_LOG || path.join(DATA_DIR, 'trades.jsonl');
 const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
 
 // ---- Env overrides (secrets + user-local settings) ----
 // Prefer injecting secrets via env rather than editing tracked files.
 if (process.env.HL_WALLET_ADDRESS) cfg.wallet.address = String(process.env.HL_WALLET_ADDRESS).trim();
 
-import { homedir } from 'os';
 function expandHome(p) {
   if (p && p.startsWith('~/')) return p.replace('~', homedir());
   return p;
@@ -149,7 +161,7 @@ const sdk = new Hyperliquid({
   disableAssetMapRefresh: true,
 });
 
-const STATE_PATH = new URL('./state.json', import.meta.url).pathname;
+const STATE_PATH = path.join(DATA_DIR, 'state.json');
 
 function loadState(){
   try { return JSON.parse(fs.readFileSync(STATE_PATH, 'utf8')); } catch { return null; }

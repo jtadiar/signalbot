@@ -4,13 +4,16 @@
 // Outputs JSON result to stdout for the Rust backend to parse.
 
 import fs from 'fs';
-import { Hyperliquid } from 'hyperliquid';
+import path from 'path';
 import { homedir } from 'os';
+import { Hyperliquid } from 'hyperliquid';
+
+const DATA_DIR = process.env.DATA_DIR || path.join(homedir(), '.config', 'hl-signalbot');
 
 // Load .env quietly — dotenv v17+ prints to stdout which corrupts our JSON output
 try {
   process.env.DOTENV_CONFIG_QUIET = 'true';
-  const envPath = process.env.DOTENV_CONFIG_PATH || new URL('./.env', import.meta.url).pathname;
+  const envPath = process.env.DOTENV_CONFIG_PATH || path.join(DATA_DIR, '.env');
   if (fs.existsSync(envPath)) {
     const dotenv = await import('dotenv');
     dotenv.config({ path: envPath, quiet: true });
@@ -25,9 +28,9 @@ function readSecret(p) {
   try { return fs.readFileSync(expandHome(p), 'utf8').trim(); } catch { return null; }
 }
 
-const configPath = process.argv[2] || new URL('./config.json', import.meta.url).pathname;
+const configPath = process.argv[2] || path.join(DATA_DIR, 'config.json');
 const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-const TRADE_LOG = process.env.TRADE_LOG || new URL('./trades.jsonl', import.meta.url).pathname;
+const TRADE_LOG = process.env.TRADE_LOG || path.join(DATA_DIR, 'trades.jsonl');
 
 if (process.env.HL_WALLET_ADDRESS) cfg.wallet.address = String(process.env.HL_WALLET_ADDRESS).trim();
 
@@ -93,7 +96,7 @@ try {
 
   // Clear bot state so it doesn't think position is still open
   try {
-    const statePath = new URL('./state.json', import.meta.url).pathname;
+    const statePath = path.join(DATA_DIR, 'state.json');
     const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
     state.activeSide = null;
     state.entryPx = null;

@@ -86,12 +86,9 @@ fn user_data_dir() -> Result<std::path::PathBuf, String> {
     Ok(d)
 }
 
-/// Where user-writable bot config/env live (separate from bundled code).
-fn bot_config_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
-    // In dev mode, use the bot/ folder directly for convenience.
-    if cfg!(debug_assertions) {
-        return find_bot_dir(app);
-    }
+/// Where user-writable bot config/data live (persists across reinstalls).
+/// Always uses ~/.config/hl-signalbot/ so data survives uninstall/reinstall.
+fn bot_config_dir(_app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     user_data_dir()
 }
 
@@ -254,6 +251,7 @@ fn start_bot(app: tauri::AppHandle, state: State<BotState>) -> Result<(), String
     if env_path.exists() {
         cmd.env("DOTENV_CONFIG_PATH", env_path.to_str().unwrap());
     }
+    cmd.env("DATA_DIR", config_dir.to_str().unwrap());
 
     let mut child = cmd.spawn().map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
@@ -391,6 +389,7 @@ async fn close_position(app: tauri::AppHandle) -> Result<String, String> {
     }
 
     cmd.env("DOTENV_CONFIG_QUIET", "true");
+    cmd.env("DATA_DIR", config_dir.to_str().unwrap());
 
     let output = cmd.output().map_err(|e| format!("Failed to run close script: {}", e))?;
     let raw_stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();

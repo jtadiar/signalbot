@@ -263,9 +263,10 @@ const envContent = [
   '',
 ].join('\n');
 
-const envPath = path.join(ROOT, '.env');
+fs.mkdirSync(keyDir, { recursive: true });
+const envPath = path.join(keyDir, '.env');
 fs.writeFileSync(envPath, envContent);
-ok('.env written');
+ok('.env written to ' + keyDir);
 
 const examplePath = path.join(ROOT, 'config.example.json');
 const cfgObj = JSON.parse(fs.readFileSync(examplePath, 'utf8'));
@@ -289,9 +290,9 @@ if (wantTg === 'y' || wantTg === 'yes') {
   cfgObj.telegram.enabled = false;
 }
 
-const cfgPath = path.join(ROOT, 'config.json');
+const cfgPath = path.join(keyDir, 'config.json');
 fs.writeFileSync(cfgPath, JSON.stringify(cfgObj, null, 2));
-ok('config.json written');
+ok('config.json written to ' + keyDir);
 stepFooter();
 
 // ═══════════════════════════════════════════════════════════════════════

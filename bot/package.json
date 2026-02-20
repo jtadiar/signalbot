@@ -5,7 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node ./cli.mjs --config ./config.json",
+    "start": "node ./cli.mjs",
     "setup": "node ./cli.mjs setup"
   },
   "engines": {

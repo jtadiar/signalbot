@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 
 import fs from 'fs';
+import path from 'path';
+import { homedir } from 'os';
+
+const DATA_DIR = path.join(homedir(), '.config', 'hl-signalbot');
 
 function parseArgs(argv){
   const out = { config: null };
@@ -46,9 +50,9 @@ if (args.setup){
   process.exit(0);
 }
 
-// Load .env if present (best-effort)
+// Load .env from user data dir (best-effort)
 try {
-  const envPath = new URL('./.env', import.meta.url).pathname;
+  const envPath = path.join(DATA_DIR, '.env');
   if (fs.existsSync(envPath)){
     const dotenv = await import('dotenv');
     dotenv.config({ path: envPath });
@@ -56,6 +60,7 @@ try {
 } catch {}
 
 if (args.config) process.env.CONFIG = args.config;
+else process.env.CONFIG = process.env.CONFIG || path.join(DATA_DIR, 'config.json');
 
 // Load the runner (it reads CONFIG/env at import time)
 await import('./index.mjs');

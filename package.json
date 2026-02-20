@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "tauri": "tauri",
-    "bot:start": "node ./bot/cli.mjs --config ./bot/config.json",
+    "bot:start": "node ./bot/cli.mjs",
     "bot:setup": "node ./bot/cli.mjs setup"
   },
   "engines": {
