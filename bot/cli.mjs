@@ -123,9 +123,11 @@ if (args.setup){
   process.exit(0);
 }
 
-// License check before running the bot
-const licensed = await checkLicense();
-if (!licensed) process.exit(1);
+// Skip license check when launched from Tauri (desktop app has its own gate)
+if (!process.env.TAURI) {
+  const licensed = await checkLicense();
+  if (!licensed) process.exit(1);
+}
 
 // Load .env from user data dir (best-effort)
 try {
