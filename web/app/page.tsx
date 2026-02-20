@@ -105,7 +105,7 @@ export default function Home() {
               <span className="text-xs text-[var(--text-muted)] ml-2">signalbot</span>
             </div>
             <div className="terminal-body">
-              <div className="text-[var(--neon)]">$ node cli.mjs</div>
+              <div className="text-[var(--neon)]">$ npx tauri dev</div>
               <br />
               <div className="text-[var(--cyan)]">░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░</div>
               <br />
@@ -181,7 +181,7 @@ export default function Home() {
             <ul className="text-left space-y-3 mb-8">
               {[
                 "Unique license key",
-                "Full bot source + CLI mode",
+                "Full desktop trading app",
                 "EMA/ATR signal engine",
                 "Configurable TP/SL + trailing stop",
                 "Telegram notifications",
