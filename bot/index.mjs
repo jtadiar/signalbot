@@ -829,8 +829,37 @@ async function manageOpenPosition(pos){
     }
   } catch {}
 
-  // ---- Stop-out: if price crosses stopPx, close remaining ----
-  if ((side==='long' && px <= state.stopPx) || (side==='short' && px >= state.stopPx)){
+  // ---- Stop-out backstop ----
+  // IMPORTANT: If a native HL stop trigger exists, treat it as the source of truth.
+  // Otherwise manual UI edits won't be reflected in state.stopPx and the bot would
+  // "hidden stop" marketClose at the old stopPx.
+  let effectiveStopPx = Number(state.stopPx || 0);
+  try {
+    const oo = await sdk.info.getFrontendOpenOrders(cfg.wallet.address, true);
+    const coinPerp = `${cfg.market.coin}-PERP`;
+    const stops = (oo||[]).filter(o =>
+      (o.coin===cfg.market.coin || o.coin===coinPerp) &&
+      o.reduceOnly===true &&
+      (String(o.orderType||'').toLowerCase().includes('stop') || o.tpsl === 'sl')
+    );
+    if (stops.length){
+      // - long: stop is below price → choose highest stopPx
+      // - short: stop is above price → choose lowest stopPx
+      const stop = side === 'long'
+        ? stops.slice().sort((a,b)=>Number(b.triggerPx)-Number(a.triggerPx))[0]
+        : stops.slice().sort((a,b)=>Number(a.triggerPx)-Number(b.triggerPx))[0];
+      const spx = Number(stop?.triggerPx || stop?.limitPx || 0);
+      if (spx > 0){
+        effectiveStopPx = spx;
+        if (Number(state.stopPx || 0) !== spx){
+          state.stopPx = spx;
+          persistState();
+        }
+      }
+    }
+  } catch {}
+
+  if (effectiveStopPx > 0 && ((side==='long' && px <= effectiveStopPx) || (side==='short' && px >= effectiveStopPx))){
     const closeResp = await sdk.custom.marketClose(`${cfg.market.coin}-PERP`).catch(()=>null);
     try {
       const fill = closeResp?.response?.data?.statuses?.[0]?.filled;
