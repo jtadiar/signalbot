@@ -36,13 +36,13 @@ export async function candleSnapshot({ coin, interval, startTime, endTime }){
       endTime,
     }
   };
-  return await postJson('https://api-ui.hyperliquid.xyz/info', body);
+  return await postJson('https://api.hyperliquid.xyz/info', body);
 }
 
 export async function allMids(){
-  return await postJson('https://api-ui.hyperliquid.xyz/info', { type: 'allMids' });
+  return await postJson('https://api.hyperliquid.xyz/info', { type: 'allMids' });
 }
 
 export async function spotClearinghouseState(user){
-  return await postJson('https://api-ui.hyperliquid.xyz/info', { type: 'spotClearinghouseState', user });
+  return await postJson('https://api.hyperliquid.xyz/info', { type: 'spotClearinghouseState', user });
 }

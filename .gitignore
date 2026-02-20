@@ -19,6 +19,8 @@ bot/.env.*
 !bot/.env.example
 bot/config.json
 bot/config.local.json
+bot/tg_token
+bot/private_key
 
 # OS
 .DS_Store

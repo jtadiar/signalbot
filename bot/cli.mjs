@@ -8,6 +8,7 @@ function parseArgs(argv){
     const a = argv[i];
     if (a === '--config' || a === '-c') out.config = argv[++i];
     else if (a === '--help' || a === '-h') out.help = true;
+    else if (a === '--no-banner') out.noBanner = true;
     else if (a === 'setup') out.setup = true;
   }
   return out;
@@ -21,8 +22,9 @@ Usage:
   hl-signalbot setup          Interactive setup wizard
 
 Options:
-  -c, --config   Path to config.json (optional if CONFIG env is set)
-  -h, --help     Show help
+  -c, --config     Path to config.json (optional if CONFIG env is set)
+  --no-banner      Skip ASCII banner during setup
+  -h, --help       Show help
 
 Env (recommended via .env):
   HL_WALLET_ADDRESS

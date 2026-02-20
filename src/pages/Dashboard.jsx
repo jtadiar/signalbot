@@ -258,6 +258,12 @@ export default function Dashboard() {
                 <span className="card-label">Entry Price</span>
                 <span className="card-value mono">${position.entryPx?.toLocaleString()}</span>
               </div>
+              {position.marginUsed > 0 && (
+                <div className="card-row">
+                  <span className="card-label">Margin</span>
+                  <span className="card-value mono">${position.marginUsed.toFixed(2)}</span>
+                </div>
+              )}
               <div className="card-row">
                 <span className="card-label">Unrealized PnL</span>
                 <span className={`card-value ${position.unrealizedPnl >= 0 ? 'text-green' : 'text-red'}`}>
@@ -300,26 +306,54 @@ export default function Dashboard() {
       </div>
 
       <div className="card">
-        <div className="card-title">Bot Log</div>
-        <div style={{ maxHeight: 240, overflowY: 'auto', fontFamily: 'monospace', fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-          {logs.length > 0 ? logs.map((l, i) => <div key={i}>{l}</div>) : <div className="text-muted">Logs will appear here when the bot is running...</div>}
-        </div>
-      </div>
+        <div className="card-title">Bot Activity</div>
+        {running && !hasPosition ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 0' }}>
+            <div className="scan-ring" />
+            <div style={{ marginTop: 16, fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>
+              Scanning for entry...
+            </div>
+            <div className="text-muted" style={{ fontSize: 12, marginTop: 6 }}>
+              Analysing EMA/ATR signals on BTC-PERP every {Math.round((position?.pollMs || 20000) / 1000)}s
+            </div>
+            {lastSignal && (
+              <div style={{ marginTop: 12, fontSize: 12, padding: '6px 12px', borderRadius: 6, background: 'var(--bg-secondary)' }}>
+                Last signal: <span className={lastSignal.side === 'long' ? 'text-green' : 'text-red'} style={{ fontWeight: 600 }}>{lastSignal.side?.toUpperCase()}</span>
+                <span className="text-muted"> — {lastSignal.reason?.slice(0, 60)}</span>
+              </div>
+            )}
+          </div>
+        ) : running && hasPosition ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 0' }}>
+            <div className="pulse-dot-active" />
+            <div style={{ marginTop: 16, fontSize: 14, fontWeight: 500, color: 'var(--green)' }}>
+              Managing open position
+            </div>
+            <div className="text-muted" style={{ fontSize: 12, marginTop: 6 }}>
+              Monitoring TP/SL triggers and trailing stop
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 0' }}>
+            <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: 12, height: 12, borderRadius: '50%', background: 'var(--text-muted)' }} />
+            </div>
+            <div className="text-muted" style={{ marginTop: 16, fontSize: 14 }}>
+              Bot is stopped
+            </div>
+          </div>
+        )}
 
-      <div className="card">
-        <div className="card-title">Last Signal</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div className="stat-big">
-            {lastSignal ? (
-              <span className={lastSignal.side === 'long' ? 'text-green' : 'text-red'}>
-                {lastSignal.side?.toUpperCase()}
-              </span>
-            ) : '--'}
-          </div>
-          <div className="text-muted" style={{ fontSize: 12 }}>
-            {lastSignal?.reason?.slice(0, 80) || 'Waiting for signal...'}
-          </div>
-        </div>
+        {logs.length > 0 && (
+          <details style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+            <summary className="text-muted" style={{ fontSize: 12, cursor: 'pointer', userSelect: 'none' }}>
+              Logs ({logs.length})
+            </summary>
+            <div style={{ maxHeight: 160, overflowY: 'auto', fontFamily: 'monospace', fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.5, marginTop: 8 }}>
+              {logs.map((l, i) => <div key={i}>{l}</div>)}
+            </div>
+          </details>
+        )}
       </div>
     </div>
   );

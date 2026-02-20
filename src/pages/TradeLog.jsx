@@ -14,40 +14,48 @@ export default function TradeLog() {
   async function loadTrades() {
     try {
       const raw = await readTradeLog();
+      const closeEntries = raw.filter(t => t.action === 'CLOSE');
+      const openEntries = raw.filter(t => t.action === 'OPEN');
 
-      // Pair OPEN+CLOSE into completed trades, show only completed (CLOSE) rows.
-      // Each CLOSE already has entryPx, exitPx, pnlUsd, side, sizeBtc.
-      const closes = raw.filter(t => t.action === 'CLOSE' && !t.partial);
-      const partials = raw.filter(t => t.action === 'CLOSE' && t.partial);
-
-      // Group partials by entryPx+side to sum their PnL into one row per position
-      const grouped = [];
-      const seen = new Set();
-
-      for (const c of closes) {
-        const key = `${c.side}:${c.entryPx}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          // Sum partials for this same entry
-          const relatedPartials = partials.filter(p => p.side === c.side && p.entryPx === c.entryPx);
-          const partialPnl = relatedPartials.reduce((s, p) => s + (p.pnlUsd || 0), 0);
-          grouped.push({ ...c, pnlUsd: (c.pnlUsd || 0) + partialPnl });
-        } else {
-          grouped.push(c);
-        }
+      // Deduplicate CLOSE events: group by side + rounded entryPx, keep first occurrence only
+      const closeSeen = new Set();
+      const uniqueCloses = [];
+      for (const c of closeEntries) {
+        const key = `${c.side}:${Math.round(Number(c.entryPx))}`;
+        if (closeSeen.has(key)) continue;
+        closeSeen.add(key);
+        uniqueCloses.push(c);
       }
 
-      // If there are only partials and no full close yet, show them as in-progress
-      setTrades(grouped.length > 0 ? grouped : closes.length > 0 ? closes : raw.filter(t => t.action === 'CLOSE'));
+      // Only the MOST RECENT open (by timestamp) with no matching close can be "Live".
+      // Any older open without a close was closed externally before the fix was in place.
+      const sortedOpens = [...openEntries].sort((a, b) => new Date(b.ts) - new Date(a.ts));
+      const liveOpens = [];
+      if (sortedOpens.length > 0) {
+        const newest = sortedOpens[0];
+        const hasClose = uniqueCloses.some(c =>
+          c.side === newest.side && Math.abs(Number(c.entryPx) - Number(newest.entryPx)) < 1
+        );
+        if (!hasClose) liveOpens.push(newest);
+      }
+
+      // Build final list: live opens + closed trades, sorted newest first
+      const all = [
+        ...liveOpens.map(o => ({ ...o, isLive: true })),
+        ...uniqueCloses.map(c => ({ ...c, isLive: false })),
+      ];
+      all.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+      setTrades(all);
     } catch {
       setTrades([]);
     }
     setLoading(false);
   }
 
-  const totalPnl = trades.reduce((sum, t) => sum + (t.pnlUsd || 0), 0);
-  const wins = trades.filter(t => (t.pnlUsd || 0) > 0).length;
-  const losses = trades.filter(t => (t.pnlUsd || 0) < 0).length;
+  const closedTrades = trades.filter(t => !t.isLive);
+  const totalPnl = closedTrades.reduce((sum, t) => sum + (Number(t.pnlUsd) || 0), 0);
+  const wins = closedTrades.filter(t => (Number(t.pnlUsd) || 0) > 0).length;
+  const losses = closedTrades.filter(t => (Number(t.pnlUsd) || 0) < 0).length;
 
   return (
     <div>
@@ -70,7 +78,12 @@ export default function TradeLog() {
         </div>
         <div className="card">
           <div className="card-title">Total Trades</div>
-          <div className="stat-big">{trades.length}</div>
+          <div className="stat-big">{closedTrades.length}</div>
+          {trades.some(t => t.isLive) && (
+            <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+              + {trades.filter(t => t.isLive).length} live
+            </div>
+          )}
         </div>
       </div>
 
@@ -80,6 +93,7 @@ export default function TradeLog() {
             <thead>
               <tr>
                 <th>Time</th>
+                <th>Status</th>
                 <th>Side</th>
                 <th>Size (BTC)</th>
                 <th>Entry</th>
@@ -89,22 +103,42 @@ export default function TradeLog() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={6} className="text-muted" style={{ textAlign: 'center', padding: 20 }}>Loading...</td></tr>
+                <tr><td colSpan={7} className="text-muted" style={{ textAlign: 'center', padding: 20 }}>Loading...</td></tr>
               ) : trades.length === 0 ? (
-                <tr><td colSpan={6} className="text-muted" style={{ textAlign: 'center', padding: 20 }}>No trades yet. Start the bot to begin trading.</td></tr>
+                <tr><td colSpan={7} className="text-muted" style={{ textAlign: 'center', padding: 20 }}>No trades yet. Start the bot to begin trading.</td></tr>
               ) : (
-                trades.map((t, i) => (
-                  <tr key={i}>
-                    <td className="text-muted" style={{ fontSize: 12 }}>{t.ts ? new Date(t.ts).toLocaleString() : '--'}</td>
-                    <td><span className={t.side === 'long' ? 'text-green' : 'text-red'}>{t.side?.toUpperCase()}</span></td>
-                    <td className="mono">{t.sizeBtc?.toFixed(5) || '--'}</td>
-                    <td className="mono">{t.entryPx ? `$${Number(t.entryPx).toLocaleString()}` : '--'}</td>
-                    <td className="mono">{t.exitPx ? `$${Number(t.exitPx).toLocaleString()}` : '--'}</td>
-                    <td className={`mono ${(t.pnlUsd || 0) >= 0 ? 'text-green' : 'text-red'}`}>
-                      {t.pnlUsd !== undefined && t.pnlUsd !== null ? `${t.pnlUsd >= 0 ? '+' : ''}$${t.pnlUsd.toFixed(2)}` : '--'}
-                    </td>
-                  </tr>
-                ))
+                trades.map((t, i) => {
+                  const pnl = Number(t.pnlUsd) || 0;
+                  return (
+                    <tr key={i}>
+                      <td className="text-muted" style={{ fontSize: 12 }}>{t.ts ? new Date(t.ts).toLocaleString() : '--'}</td>
+                      <td>
+                        {t.isLive ? (
+                          <span style={{
+                            fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
+                            background: 'var(--accent)', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.5px',
+                          }}>Live</span>
+                        ) : (
+                          <span style={{
+                            fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10,
+                            background: pnl >= 0 ? 'var(--green-bg)' : 'var(--red-bg)',
+                            color: pnl >= 0 ? 'var(--green)' : 'var(--red)',
+                            textTransform: 'uppercase', letterSpacing: '0.5px',
+                          }}>{pnl >= 0 ? 'Win' : 'Loss'}</span>
+                        )}
+                      </td>
+                      <td><span className={t.side === 'long' ? 'text-green' : 'text-red'}>{t.side?.toUpperCase()}</span></td>
+                      <td className="mono">{t.sizeBtc?.toFixed(5) || '--'}</td>
+                      <td className="mono">{t.entryPx ? `$${Number(t.entryPx).toLocaleString()}` : '--'}</td>
+                      <td className="mono">{t.exitPx ? `$${Number(t.exitPx).toLocaleString()}` : t.isLive ? <span className="text-muted">—</span> : '--'}</td>
+                      <td className={`mono ${t.isLive ? '' : pnl >= 0 ? 'text-green' : 'text-red'}`}>
+                        {t.isLive
+                          ? <span className="text-muted">—</span>
+                          : `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

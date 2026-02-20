@@ -7,12 +7,13 @@ import fs from 'fs';
 import { Hyperliquid } from 'hyperliquid';
 import { homedir } from 'os';
 
-// Load .env (same as cli.mjs)
+// Load .env quietly — dotenv v17+ prints to stdout which corrupts our JSON output
 try {
+  process.env.DOTENV_CONFIG_QUIET = 'true';
   const envPath = process.env.DOTENV_CONFIG_PATH || new URL('./.env', import.meta.url).pathname;
   if (fs.existsSync(envPath)) {
     const dotenv = await import('dotenv');
-    dotenv.config({ path: envPath });
+    dotenv.config({ path: envPath, quiet: true });
   }
 } catch {}
 

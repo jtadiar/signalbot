@@ -272,27 +272,24 @@ async function getBtcPosition(){
   const szi = pos ? Number(pos.szi||0) : 0;
   const entryPx = pos ? Number(pos.entryPx||0) : 0;
   const unrealizedPnl = pos ? Number(pos.unrealizedPnl||0) : 0;
+  const marginUsed = pos ? Number(pos.marginUsed||0) : 0;
 
-  // Extract account equity — try multiple paths since SDK versions vary
-  const accountValue = Number(
-    ch?.marginSummary?.accountValue
-    || ch?.crossMarginSummary?.accountValue
-    || ch?.marginSummary?.totalRawUsd
-    || ch?.crossMarginSummary?.totalRawUsd
-    || 0
-  );
-  if (accountValue > 0) {
-    tauriEmit({ type: 'equity', value: accountValue });
-  } else {
-    // Fallback: fetch spot USDC balance + unrealized PnL
-    try {
-      const spot = await spotClearinghouseState(cfg.wallet.address);
-      const usdc = (spot?.balances||[]).find(b=>b.coin==='USDC');
-      const spotBal = Number(usdc?.total ?? 0);
-      tauriEmit({ type: 'equity', value: spotBal + unrealizedPnl });
-    } catch {
-      tauriEmit({ type: 'equity', value: 0 });
-    }
+  // HL unified margin: spot USDC balance IS the total portfolio value.
+  // The perp accountValue is a subset (margin locked), not a separate pool.
+  try {
+    const resp = await fetch('https://api.hyperliquid.xyz/info', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'spotClearinghouseState', user: cfg.wallet.address }),
+    });
+    const data = await resp.json();
+    const usdcBal = (data?.balances || []).reduce((s, b) => {
+      if (b.coin === 'USDC' || b.coin === 'USDC:USDC') return s + Number(b.total || 0);
+      return s;
+    }, 0);
+    tauriEmit({ type: 'equity', value: usdcBal > 0 ? usdcBal : 0 });
+  } catch {
+    tauriEmit({ type: 'equity', value: 0 });
   }
 
   let orders = [];
@@ -326,7 +323,7 @@ async function getBtcPosition(){
     } catch {}
   }
 
-  tauriEmit({ type: 'position', data: { size: szi, entryPx, unrealizedPnl, side: szi > 0 ? 'long' : szi < 0 ? 'short' : null, coin: cfg.market.coin, orders, fees: posFees, stopPx: state.stopPx || null, tp1Done: state.tp1Done, tp2Done: state.tp2Done } });
+  tauriEmit({ type: 'position', data: { size: szi, entryPx, unrealizedPnl, marginUsed, side: szi > 0 ? 'long' : szi < 0 ? 'short' : null, coin: cfg.market.coin, orders, fees: posFees, stopPx: state.stopPx || null, tp1Done: state.tp1Done, tp2Done: state.tp2Done } });
   return { szi, entryPx };
 }
 
@@ -433,22 +430,18 @@ function computeRiskSizedNotional({ equityUsd, stopPct }){
   return { riskUsd, notional };
 }
 
-function tpPxFor({ side, entryPx, stopPct, absSz, idx, rMultiple }){
-  const byR = side === 'long'
+function tpPxFor({ side, entryPx, stopPct, absSz, idx, rMultiple, pct }){
+  // Percentage-based TP: pct field takes priority over rMultiple
+  if (Number.isFinite(pct) && pct > 0) {
+    return side === 'long'
+      ? (entryPx * (1 + pct))
+      : (entryPx * (1 - pct));
+  }
+
+  // R-multiple-based TP (legacy)
+  return side === 'long'
     ? (entryPx * (1 + rMultiple * stopPct))
     : (entryPx * (1 - rMultiple * stopPct));
-
-  const mins = Array.isArray(cfg?.exits?.tpMinUsd) ? cfg.exits.tpMinUsd : [];
-  const minUsd = Number(mins?.[idx] ?? NaN);
-  if (!(Number.isFinite(minUsd) && minUsd > 0 && Number.isFinite(absSz) && absSz > 0)) return byR;
-
-  // Approximate move needed to realize minUsd (ignores fees; still a big improvement over $1-3 TP1)
-  const move = minUsd / absSz;
-  const byUsd = side === 'long' ? (entryPx + move) : (entryPx - move);
-
-  // Choose the more conservative target (further away) to ensure minimum dollar profit.
-  // For longs: higher price is further away; for shorts: lower price is further away.
-  return side === 'long' ? Math.max(byR, byUsd) : Math.min(byR, byUsd);
 }
 
 async function manageOpenPosition(pos){
@@ -586,10 +579,11 @@ async function manageOpenPosition(pos){
       for (let i = 0; i < tpPlan.length; i++){
         const t = tpPlan[i] || {};
         const r = Number(t.rMultiple || 0);
+        const pct = Number(t.pct || 0);
         const frac = Number(t.closeFrac || 0);
-        if (!(r > 0) || !(frac > 0)) continue;
+        if (!(r > 0 || pct > 0) || !(frac > 0)) continue;
 
-        const tpPx = tpPxFor({ side, entryPx: state.entryPx, stopPct, absSz, idx: i, rMultiple: r });
+        const tpPx = tpPxFor({ side, entryPx: state.entryPx, stopPct, absSz, idx: i, rMultiple: r, pct });
 
         const tpSz = Math.min(absSz, Number(state.initialSz || absSz) * frac);
         if (tpPx > 0 && tpSz > 0){
@@ -698,9 +692,10 @@ async function manageOpenPosition(pos){
           try {
             const tp2Cfg = tpPlan[1];
             const r2 = Number(tp2Cfg?.rMultiple || 0);
+            const pct2 = Number(tp2Cfg?.pct || 0);
             const frac2 = Number(tp2Cfg?.closeFrac || 0);
-            if (r2 > 0 && frac2 > 0 && !state.tp2Done){
-              const tp2Px = tpPxFor({ side, entryPx: state.entryPx, stopPct, absSz, idx: 1, rMultiple: r2 });
+            if ((r2 > 0 || pct2 > 0) && frac2 > 0 && !state.tp2Done){
+              const tp2Px = tpPxFor({ side, entryPx: state.entryPx, stopPct, absSz, idx: 1, rMultiple: r2, pct: pct2 });
               const tp2Sz = Math.min(absSz, Number(state.initialSz || absSz) * frac2);
               if (tp2Px > 0 && tp2Sz > 0){
                 const coinPerp = `${cfg.market.coin}-PERP`;
@@ -741,8 +736,9 @@ async function manageOpenPosition(pos){
 
           if (cfg?.exits?.trailStopToTp1OnTp2){
             const r1 = Number(tp1?.rMultiple || 0);
-            if (r1 > 0){
-              const tp1Px = tpPxFor({ side, entryPx: state.entryPx, stopPct, absSz, idx: 0, rMultiple: r1 });
+            const pct1 = Number(tp1?.pct || 0);
+            if (r1 > 0 || pct1 > 0){
+              const tp1Px = tpPxFor({ side, entryPx: state.entryPx, stopPct, absSz, idx: 0, rMultiple: r1, pct: pct1 });
               if (tp1Px > 0){
                 const curStop = Number(state.stopPx || 0);
                 const better = (side === 'long') ? (tp1Px > curStop) : (curStop === 0 ? true : tp1Px < curStop);
@@ -767,13 +763,14 @@ async function manageOpenPosition(pos){
     for (let i = 0; i < tpPlan.length; i++){
       const t = tpPlan[i] || {};
       const r = Number(t.rMultiple || 0);
+      const pctTp = Number(t.pct || 0);
       const frac = Number(t.closeFrac || 0);
-      if (!(r > 0) || !(frac > 0)) continue;
+      if (!(r > 0 || pctTp > 0) || !(frac > 0)) continue;
 
       const doneKey = i === 0 ? 'tp1Done' : i === 1 ? 'tp2Done' : `tp${i+1}Done`;
       if (state[doneKey]) continue;
 
-      const targetPx = tpPxFor({ side, entryPx: state.entryPx, stopPct, absSz, idx: i, rMultiple: r });
+      const targetPx = tpPxFor({ side, entryPx: state.entryPx, stopPct, absSz, idx: i, rMultiple: r, pct: pctTp });
 
       const hit = side === 'long' ? (px >= targetPx) : (px <= targetPx);
       if (!hit) continue;
@@ -822,7 +819,17 @@ async function manageOpenPosition(pos){
 
   // ---- Stop-out: if price crosses stopPx, close remaining ----
   if ((side==='long' && px <= state.stopPx) || (side==='short' && px >= state.stopPx)){
-    await sdk.custom.marketClose(`${cfg.market.coin}-PERP`).catch(()=>null);
+    const closeResp = await sdk.custom.marketClose(`${cfg.market.coin}-PERP`).catch(()=>null);
+    try {
+      const fill = closeResp?.response?.data?.statuses?.[0]?.filled;
+      const exitPx = Number(fill?.avgPx || px);
+      const exitSz = Number(fill?.totalSz || absSz);
+      const pnlUsd = (state.entryPx && exitPx)
+        ? ((side==='short' ? (state.entryPx - exitPx) : (exitPx - state.entryPx)) * exitSz) : null;
+      const ev = { ts: nowIso(), action: 'CLOSE', side, sizeBtc: exitSz, entryPx: state.entryPx, exitPx, pnlUsd, leader: 'signalbot', partial: false, reason: 'stop_out' };
+      fs.appendFileSync(TRADE_LOG, JSON.stringify(ev) + "\n");
+      console.log(nowIso(), `Stop-out closed: ${side} ${exitSz} @ ${exitPx}, PnL: ${pnlUsd?.toFixed(2) ?? '?'}`);
+    } catch {}
 
     state.lastExitAtMs = Date.now();
     state.activeSide = null;
@@ -853,7 +860,17 @@ async function manageOpenPosition(pos){
         cfg,
       });
       if (sig && sig.side && sig.side !== side){
-        await sdk.custom.marketClose(`${cfg.market.coin}-PERP`).catch(()=>null);
+        const closeResp = await sdk.custom.marketClose(`${cfg.market.coin}-PERP`).catch(()=>null);
+        try {
+          const fill = closeResp?.response?.data?.statuses?.[0]?.filled;
+          const exitPx = Number(fill?.avgPx || px);
+          const exitSz = Number(fill?.totalSz || absSz);
+          const pnlUsd = (state.entryPx && exitPx)
+            ? ((side==='short' ? (state.entryPx - exitPx) : (exitPx - state.entryPx)) * exitSz) : null;
+          const ev = { ts: nowIso(), action: 'CLOSE', side, sizeBtc: exitSz, entryPx: state.entryPx, exitPx, pnlUsd, leader: 'signalbot', partial: false, reason: 'runner_exit' };
+          fs.appendFileSync(TRADE_LOG, JSON.stringify(ev) + "\n");
+          console.log(nowIso(), `Runner exit closed: ${side} ${exitSz} @ ${exitPx}, PnL: ${pnlUsd?.toFixed(2) ?? '?'}`);
+        } catch {}
 
         state.lastExitAtMs = Date.now();
         state.activeSide = null;
@@ -1059,9 +1076,41 @@ async function mainLoop(){
   }
 
   // Position is flat — if we had an active position, it was closed by HL trigger or externally.
-  // Clean up orphaned orders and reset state so the bot can re-enter cleanly.
+  // Re-read state from disk first: close.mjs may have already handled the close and cleared activeSide.
+  const diskState = loadState();
+  if (diskState && !diskState.activeSide) {
+    Object.assign(state, diskState);
+  }
+
   if (state.activeSide) {
-    console.log(nowIso(), 'Position closed externally (HL trigger or manual). Cleaning up.');
+    const closeSide = state.activeSide;
+    const closeEntry = state.entryPx;
+    const closeSz = state.initialSz || 0;
+
+    // Try to find exit price from recent fills
+    let exitPx = 0;
+    let exitSz = closeSz;
+    try {
+      const since = Date.now() - 10 * 60 * 1000; // last 10 minutes
+      const fills = await sdk.info.getUserFillsByTime(cfg.wallet.address, since, Date.now(), true);
+      const coinFills = (fills || []).filter(f => String(f.coin || '').includes(cfg.market.coin));
+      if (coinFills.length > 0) {
+        const last = coinFills[coinFills.length - 1];
+        exitPx = Number(last.px || 0);
+        exitSz = Number(last.sz || closeSz);
+      }
+    } catch {}
+    if (!exitPx) { try { exitPx = await midPx(); } catch {} }
+
+    const pnlUsd = (closeEntry && exitPx)
+      ? ((closeSide === 'short' ? (closeEntry - exitPx) : (exitPx - closeEntry)) * exitSz) : null;
+
+    try {
+      const ev = { ts: nowIso(), action: 'CLOSE', side: closeSide, sizeBtc: exitSz, entryPx: closeEntry, exitPx, pnlUsd, leader: 'signalbot', partial: false, reason: 'external_close' };
+      fs.appendFileSync(TRADE_LOG, JSON.stringify(ev) + "\n");
+    } catch {}
+
+    console.log(nowIso(), `Position closed externally: ${closeSide} ${exitSz} @ ${exitPx || '?'}, PnL: ${pnlUsd?.toFixed(2) ?? '?'}`);
     await cancelAllBtcOrders().catch(() => {});
     state.lastExitAtMs = Date.now();
     state.activeSide = null;

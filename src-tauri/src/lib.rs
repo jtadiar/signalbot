@@ -390,8 +390,17 @@ async fn close_position(app: tauri::AppHandle) -> Result<String, String> {
         cmd.env("DOTENV_CONFIG_PATH", env_path.to_str().unwrap());
     }
 
+    cmd.env("DOTENV_CONFIG_QUIET", "true");
+
     let output = cmd.output().map_err(|e| format!("Failed to run close script: {}", e))?;
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let raw_stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    // Extract the last JSON line — dotenv may print noise before our JSON output
+    let stdout = raw_stdout
+        .lines()
+        .rev()
+        .find(|l| l.starts_with('{'))
+        .unwrap_or("")
+        .to_string();
     if stdout.is_empty() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(format!("Close script failed: {}", stderr));

@@ -6,8 +6,6 @@ import Dashboard from './pages/Dashboard';
 import TradeLog from './pages/TradeLog';
 import Settings from './pages/Settings';
 
-const PAGES = { dashboard: Dashboard, tradelog: TradeLog, settings: Settings };
-
 export default function App() {
   const [licensed, setLicensed] = useState(() => !!localStorage.getItem('license_key'));
   const [configured, setConfigured] = useState(null); // null = loading
@@ -72,8 +70,6 @@ export default function App() {
     return <Setup onComplete={() => { setConfigured(true); localStorage.setItem('configured', '1'); }} />;
   }
 
-  const Page = PAGES[page] || Dashboard;
-
   return (
     <div className="app">
       <nav className="sidebar">
@@ -94,7 +90,9 @@ export default function App() {
         </div>
       </nav>
       <main className="main">
-        <Page />
+        <div style={{ display: page === 'dashboard' ? 'block' : 'none' }}><Dashboard /></div>
+        <div style={{ display: page === 'tradelog' ? 'block' : 'none' }}><TradeLog /></div>
+        <div style={{ display: page === 'settings' ? 'block' : 'none' }}><Settings /></div>
       </main>
     </div>
   );
