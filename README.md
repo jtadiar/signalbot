@@ -68,6 +68,8 @@ node cli.mjs
 
 No Rust, no Tauri, no desktop app required. Use `--no-banner` to skip the ASCII art header.
 
+See [`bot/CONFIGURATION.md`](bot/CONFIGURATION.md) for a full guide to every setting — TP levels, trailing stops, risk parameters, signal tuning, and common presets.
+
 ## How It Works
 
 1. **Setup wizard** — wallet address, private key (stored locally, owner-only permissions), Hyperliquid funding check, Telegram pings, risk parameters
