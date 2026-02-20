@@ -1,5 +1,3 @@
-import BetaForm from "./components/BetaForm";
-
 const features = [
   {
     title: "EMA/ATR Signal Engine",
@@ -52,10 +50,9 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-6">
             <a href="#features" className="text-sm text-[var(--text-muted)] hover:text-white transition">Features</a>
-            <a href="#pricing" className="text-sm text-[var(--text-muted)] hover:text-white transition">Beta Access</a>
-            <a href="#download" className="text-sm text-[var(--text-muted)] hover:text-white transition">Download</a>
+            <a href="#pricing" className="text-sm text-[var(--text-muted)] hover:text-white transition">Pricing</a>
             <a href="#faq" className="text-sm text-[var(--text-muted)] hover:text-white transition">FAQ</a>
-            <a href="#pricing" className="btn-primary !py-2 !px-5 !text-sm">Get Beta Key</a>
+            <a href="#pricing" className="btn-primary !py-2 !px-5 !text-sm">Buy Now</a>
           </div>
         </div>
       </nav>
@@ -74,13 +71,13 @@ export default function Home() {
           </h1>
 
           <p className="text-xl text-[var(--text-muted)] max-w-2xl mx-auto mb-10 leading-relaxed">
-            A desktop trading bot that runs on your machine. EMA/ATR signals, native TP/SL placement,
+            A trading bot that runs on your machine. EMA/ATR signals, native TP/SL placement,
             trailing stops, and risk guardrails. Your keys never leave your device.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-            <a href="#pricing" className="btn-primary text-lg">Get Free Beta Access</a>
-            <a href="#download" className="btn-secondary text-lg">See Platforms</a>
+            <a href="#pricing" className="btn-primary text-lg">Get Signalbot — $99</a>
+            <a href="#features" className="btn-secondary text-lg">See Features</a>
           </div>
 
           {/* Stats */}
@@ -106,7 +103,7 @@ export default function Home() {
               <span className="text-xs text-[var(--text-muted)] ml-2">signalbot</span>
             </div>
             <div className="terminal-body">
-              <div className="text-[var(--neon)]">$ node cli.mjs setup</div>
+              <div className="text-[var(--neon)]">$ node cli.mjs</div>
               <br />
               <div className="text-[var(--cyan)]">░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░</div>
               <br />
@@ -120,8 +117,7 @@ export default function Home() {
               <div><span className="text-[var(--neon)]">✔</span> Syncing funding rates</div>
               <div><span className="text-[var(--neon)]">✔</span> Risk engine armed</div>
               <br />
-              <div className="text-[var(--neon)] font-bold">  SETUP COMPLETE</div>
-              <div className="text-[var(--text-muted)]">  Start the bot with: <span className="text-white">npm start</span></div>
+              <div className="text-[var(--neon)] font-bold">  BOT RUNNING — scanning for signals...</div>
             </div>
           </div>
         </div>
@@ -155,9 +151,9 @@ export default function Home() {
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-16">How it works</h2>
           <div className="grid md:grid-cols-3 gap-8">
             {[
-              { step: "1", title: "Buy & Download", desc: "Purchase a license key and download the installer for your OS. No terminal or coding required." },
-              { step: "2", title: "Configure", desc: "Open the app, enter your license key, and follow the setup wizard: wallet, risk parameters, TP/SL, Telegram." },
-              { step: "3", title: "Start Trading", desc: "Hit Start. The bot scans for EMA/ATR signals every 20 seconds and executes trades on Hyperliquid automatically." },
+              { step: "1", title: "Buy a License", desc: "One-time payment. You instantly get a unique license key and full installation instructions." },
+              { step: "2", title: "Install & Configure", desc: "Install Node.js, clone the repo, run the setup wizard. Enter your wallet key, risk params, and TP/SL settings." },
+              { step: "3", title: "Start Trading", desc: "Enter your license key, hit Start. The bot scans for EMA/ATR signals every 20 seconds and executes trades automatically." },
             ].map((s) => (
               <div key={s.step} className="text-center">
                 <div className="w-12 h-12 rounded-full border-2 border-[var(--neon)] flex items-center justify-center mx-auto mb-4 text-[var(--neon)] font-bold text-lg">{s.step}</div>
@@ -169,21 +165,21 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Pricing / Beta Access */}
+      {/* Pricing */}
       <section id="pricing" className="py-20 px-6 border-t border-[var(--border)]">
         <div className="max-w-lg mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Free Beta Access</h2>
-          <p className="text-[var(--text-muted)] mb-12">Enter your email to get a free license key. No payment required during beta.</p>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">One-Time Payment</h2>
+          <p className="text-[var(--text-muted)] mb-12">No subscriptions. No recurring fees. Pay once, trade forever.</p>
 
           <div className="card glow-green !p-8">
-            <div className="text-sm text-[var(--neon)] font-semibold uppercase tracking-wider mb-2">Signalbot Beta</div>
-            <div className="text-5xl font-black mb-2 line-through text-[var(--text-muted)]">$99</div>
-            <div className="text-[var(--neon)] font-bold mb-8">FREE during beta</div>
+            <div className="text-sm text-[var(--neon)] font-semibold uppercase tracking-wider mb-2">Signalbot License</div>
+            <div className="text-5xl font-black mb-2">$99</div>
+            <div className="text-[var(--text-muted)] mb-8">Lifetime access</div>
 
             <ul className="text-left space-y-3 mb-8">
               {[
-                "Full desktop app (macOS + Windows)",
-                "CLI mode for developers",
+                "Unique license key",
+                "Full bot source + CLI mode",
                 "EMA/ATR signal engine",
                 "Configurable TP/SL + trailing stop",
                 "Telegram notifications",
@@ -197,42 +193,16 @@ export default function Home() {
               ))}
             </ul>
 
-            <BetaForm />
+            <form action="/api/checkout" method="POST">
+              <button type="submit" className="btn-primary w-full justify-center text-lg">
+                Buy Now — $99
+              </button>
+            </form>
 
             <p className="text-xs text-[var(--text-muted)] mt-4">
-              License key delivered instantly. No credit card needed.
+              Secure payment via Stripe. License key delivered instantly.
             </p>
           </div>
-        </div>
-      </section>
-
-      {/* Download */}
-      <section id="download" className="py-20 px-6 border-t border-[var(--border)]">
-        <div className="max-w-3xl mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Available on macOS &amp; Windows</h2>
-          <p className="text-[var(--text-muted)] mb-12">
-            No terminal, no compiling. Buy a license and get instant access to the installer for your platform.
-          </p>
-
-          <div className="grid md:grid-cols-2 gap-6 max-w-xl mx-auto mb-10">
-            <div className="card !p-6 text-center">
-              <div className="text-3xl mb-3">🍎</div>
-              <h3 className="font-bold text-lg mb-1">macOS</h3>
-              <p className="text-sm text-[var(--text-muted)]">Apple Silicon &amp; Intel (.dmg)</p>
-            </div>
-
-            <div className="card !p-6 text-center">
-              <div className="text-3xl mb-3">🪟</div>
-              <h3 className="font-bold text-lg mb-1">Windows</h3>
-              <p className="text-sm text-[var(--text-muted)]">Windows 10 / 11 (.msi)</p>
-            </div>
-          </div>
-
-          <a href="#pricing" className="btn-primary text-lg">Get Free Beta Key</a>
-
-          <p className="text-sm text-[var(--text-muted)] mt-6">
-            Only requires <a href="https://nodejs.org" target="_blank" className="text-[var(--cyan)] hover:underline">Node.js</a> (free). Download links provided after you get your key.
-          </p>
         </div>
       </section>
 
@@ -243,11 +213,12 @@ export default function Home() {
           <div className="space-y-6">
             {[
               { q: "Is my private key safe?", a: "Yes. Your private key is stored locally on your machine with restrictive file permissions (owner-only). It is never transmitted, logged, or uploaded anywhere. All trades execute directly from your device to Hyperliquid." },
-              { q: "What do I need to run the bot?", a: "Just Node.js (free, one-click install from nodejs.org) and a Hyperliquid account with USDC deposited. Download the installer for your OS, open the app, and you're ready. No terminal or coding required." },
+              { q: "What do I need to run the bot?", a: "Node.js (free, one-click install from nodejs.org) and a Hyperliquid account with USDC deposited. After purchase, you'll get step-by-step install instructions." },
               { q: "Can I customize the trading strategy?", a: "Yes. Every parameter is configurable: TP distances, trailing stop tightness, leverage, risk per trade, signal sensitivity, cooldowns, and more. See the CONFIGURATION.md guide." },
-              { q: "Does it work on Mac and Windows?", a: "Yes. The desktop app builds for both macOS and Windows. The CLI mode works on any platform with Node.js." },
-              { q: "Is this a subscription?", a: "No. One-time payment for lifetime access, including all future updates." },
+              { q: "Does it work on Mac and Windows?", a: "Yes. The CLI runs on any platform with Node.js — macOS, Windows, and Linux." },
+              { q: "Is this a subscription?", a: "No. One-time $99 payment for lifetime access, including all future updates." },
               { q: "What pairs does it trade?", a: "Currently BTC-PERP on Hyperliquid. Additional pairs may be added in future updates." },
+              { q: "How do I get my license key?", a: "Immediately after payment, you'll see a success page with your unique license key and full installation instructions. Keep the key safe — you'll enter it when you first launch the bot." },
             ].map((faq) => (
               <div key={faq.q} className="card">
                 <h3 className="font-semibold mb-2">{faq.q}</h3>
@@ -266,9 +237,8 @@ export default function Home() {
             <span className="font-bold">SIGNALBOT</span>
           </div>
           <div className="flex items-center gap-6 text-sm text-[var(--text-muted)]">
-            <a href="#download" className="hover:text-white transition">Download</a>
-            <a href="https://github.com/jtadiar/signalbot" target="_blank" className="hover:text-white transition">GitHub</a>
-            <a href="https://github.com/jtadiar/signalbot/blob/main/bot/CONFIGURATION.md" target="_blank" className="hover:text-white transition">Docs</a>
+            <a href="#pricing" className="hover:text-white transition">Buy</a>
+            <a href="#faq" className="hover:text-white transition">FAQ</a>
             <span>Built for Hyperliquid</span>
           </div>
         </div>

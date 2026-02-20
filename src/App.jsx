@@ -13,7 +13,6 @@ export default function App() {
   const [nodeError, setNodeError] = useState('');
   const [page, setPage] = useState('dashboard');
 
-  // Check if config exists on disk (not just localStorage)
   useEffect(() => {
     if (!licensed) return;
     Promise.all([
@@ -27,7 +26,6 @@ export default function App() {
     });
   }, [licensed]);
 
-  // Check Node.js availability
   useEffect(() => {
     invoke('check_node').then(path => {
       setNodeOk(true);
