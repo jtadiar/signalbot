@@ -6,14 +6,15 @@ import { useState, useEffect, Suspense } from "react";
 function SuccessContent() {
   const params = useSearchParams();
   const sessionId = params.get("session_id");
-  const [licenseKey, setLicenseKey] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const trialKey = params.get("key");
+  const [licenseKey, setLicenseKey] = useState<string | null>(trialKey);
+  const [loading, setLoading] = useState(!trialKey);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (!sessionId) {
-      setError("No session ID found.");
+    if (trialKey || !sessionId) {
+      if (!trialKey && !sessionId) setError("No session found.");
       setLoading(false);
       return;
     }
@@ -30,7 +31,7 @@ function SuccessContent() {
       })
       .catch(() => setError("Failed to retrieve license key."))
       .finally(() => setLoading(false));
-  }, [sessionId]);
+  }, [sessionId, trialKey]);
 
   function handleCopy() {
     if (licenseKey) {
@@ -46,7 +47,7 @@ function SuccessContent() {
         {loading ? (
           <>
             <div className="text-4xl mb-4">⏳</div>
-            <h1 className="text-2xl font-bold mb-2">Processing payment...</h1>
+            <h1 className="text-2xl font-bold mb-2">Processing...</h1>
             <p className="text-[var(--text-muted)]">Generating your license key.</p>
           </>
         ) : error ? (
@@ -54,12 +55,14 @@ function SuccessContent() {
             <div className="text-4xl mb-4">⚠️</div>
             <h1 className="text-2xl font-bold mb-2">Something went wrong</h1>
             <p className="text-[var(--text-muted)]">{error}</p>
-            <a href="/#pricing" className="btn-primary mt-6 inline-block">Try Again</a>
+            <a href="/" className="btn-primary mt-6 inline-block">Try Again</a>
           </>
         ) : (
           <>
             <div className="text-4xl mb-4">✓</div>
-            <h1 className="text-2xl font-bold mb-2 text-[var(--neon)]">Payment Successful</h1>
+            <h1 className="text-2xl font-bold mb-2 text-[var(--neon)]">
+              {trialKey ? "Beta Access Activated" : "Payment Successful"}
+            </h1>
             <p className="text-[var(--text-muted)] mb-6">Your Signalbot license key:</p>
 
             <div
@@ -100,7 +103,7 @@ function SuccessContent() {
             </a>
 
             <p className="text-xs text-[var(--text-muted)] mt-6">
-              Save this key somewhere safe. It&apos;s also been sent to your email.
+              Save this key somewhere safe.
             </p>
           </>
         )}

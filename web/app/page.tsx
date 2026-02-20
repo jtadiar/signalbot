@@ -1,3 +1,5 @@
+import BetaForm from "./components/BetaForm";
+
 const features = [
   {
     title: "EMA/ATR Signal Engine",
@@ -50,10 +52,10 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-6">
             <a href="#features" className="text-sm text-[var(--text-muted)] hover:text-white transition">Features</a>
-            <a href="#pricing" className="text-sm text-[var(--text-muted)] hover:text-white transition">Pricing</a>
+            <a href="#pricing" className="text-sm text-[var(--text-muted)] hover:text-white transition">Beta Access</a>
             <a href="#download" className="text-sm text-[var(--text-muted)] hover:text-white transition">Download</a>
             <a href="#faq" className="text-sm text-[var(--text-muted)] hover:text-white transition">FAQ</a>
-            <a href="#pricing" className="btn-primary !py-2 !px-5 !text-sm">Get Started</a>
+            <a href="#pricing" className="btn-primary !py-2 !px-5 !text-sm">Get Beta Key</a>
           </div>
         </div>
       </nav>
@@ -77,7 +79,7 @@ export default function Home() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-            <a href="#pricing" className="btn-primary text-lg">Get Started — $99</a>
+            <a href="#pricing" className="btn-primary text-lg">Get Free Beta Access</a>
             <a href="#download" className="btn-secondary text-lg">See Platforms</a>
           </div>
 
@@ -167,16 +169,16 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Pricing */}
+      {/* Pricing / Beta Access */}
       <section id="pricing" className="py-20 px-6 border-t border-[var(--border)]">
         <div className="max-w-lg mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">One price. Lifetime access.</h2>
-          <p className="text-[var(--text-muted)] mb-12">No subscriptions, no recurring fees. Pay once, trade forever.</p>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">Free Beta Access</h2>
+          <p className="text-[var(--text-muted)] mb-12">Enter your email to get a free license key. No payment required during beta.</p>
 
           <div className="card glow-green !p-8">
-            <div className="text-sm text-[var(--neon)] font-semibold uppercase tracking-wider mb-2">Signalbot License</div>
-            <div className="text-5xl font-black mb-2">$99</div>
-            <div className="text-[var(--text-muted)] mb-8">one-time payment</div>
+            <div className="text-sm text-[var(--neon)] font-semibold uppercase tracking-wider mb-2">Signalbot Beta</div>
+            <div className="text-5xl font-black mb-2 line-through text-[var(--text-muted)]">$99</div>
+            <div className="text-[var(--neon)] font-bold mb-8">FREE during beta</div>
 
             <ul className="text-left space-y-3 mb-8">
               {[
@@ -195,14 +197,10 @@ export default function Home() {
               ))}
             </ul>
 
-            <form action="/api/checkout" method="POST">
-              <button type="submit" className="btn-primary w-full text-lg">
-                Buy Now
-              </button>
-            </form>
+            <BetaForm />
 
             <p className="text-xs text-[var(--text-muted)] mt-4">
-              Secure payment via Stripe. License key delivered instantly.
+              License key delivered instantly. No credit card needed.
             </p>
           </div>
         </div>
@@ -230,10 +228,10 @@ export default function Home() {
             </div>
           </div>
 
-          <a href="#pricing" className="btn-primary text-lg">Buy License to Download</a>
+          <a href="#pricing" className="btn-primary text-lg">Get Free Beta Key</a>
 
           <p className="text-sm text-[var(--text-muted)] mt-6">
-            Only requires <a href="https://nodejs.org" target="_blank" className="text-[var(--cyan)] hover:underline">Node.js</a> (free). Download links are provided after purchase.
+            Only requires <a href="https://nodejs.org" target="_blank" className="text-[var(--cyan)] hover:underline">Node.js</a> (free). Download links provided after you get your key.
           </p>
         </div>
       </section>
