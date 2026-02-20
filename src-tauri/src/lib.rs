@@ -95,24 +95,85 @@ fn bot_config_dir(_app: &tauri::AppHandle) -> Result<std::path::PathBuf, String>
 // --- Node.js Runtime ---
 
 fn find_node() -> Result<String, String> {
-    // Check common locations
-    for name in &["node", "/usr/local/bin/node", "/opt/homebrew/bin/node"] {
-        if StdCommand::new(name).arg("--version").stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok() {
-            return Ok(name.to_string());
-        }
-    }
-    // Check via PATH
-    if let Ok(output) = StdCommand::new("which").arg("node").output() {
-        if output.status.success() {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !path.is_empty() {
-                return Ok(path);
+    let home = std::env::var("HOME").unwrap_or_default();
+
+    // Hardcoded paths: system installs, Homebrew, pnpm, nvm, fnm, Volta, n
+    let mut candidates: Vec<String> = vec![
+        "/usr/local/bin/node".into(),
+        "/opt/homebrew/bin/node".into(),
+        format!("{}/Library/pnpm/node", home),
+        format!("{}/.local/share/pnpm/node", home),
+        format!("{}/.volta/bin/node", home),
+        format!("{}/.local/bin/node", home),
+        format!("{}/n/bin/node", home),
+    ];
+
+    // nvm: detect current default version
+    let nvm_dir = std::env::var("NVM_DIR").unwrap_or_else(|_| format!("{}/.nvm", home));
+    let nvm_default = std::path::Path::new(&nvm_dir).join("alias/default");
+    if let Ok(ver) = std::fs::read_to_string(&nvm_default) {
+        let ver = ver.trim().to_string();
+        // Look for exact version or glob first matching entry
+        let versions_dir = std::path::Path::new(&nvm_dir).join("versions/node");
+        if let Ok(entries) = std::fs::read_dir(&versions_dir) {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.starts_with(&format!("v{}", ver)) || name == format!("v{}", ver) {
+                    candidates.push(format!("{}/bin/node", entry.path().display()));
+                }
             }
         }
     }
+
+    // fnm: check common install location
+    let fnm_dir = format!("{}/.local/share/fnm/node-versions", home);
+    if let Ok(entries) = std::fs::read_dir(&fnm_dir) {
+        for entry in entries.flatten() {
+            candidates.push(format!("{}/installation/bin/node", entry.path().display()));
+        }
+    }
+
+    for path in &candidates {
+        if std::path::Path::new(path).exists() {
+            if StdCommand::new(path).arg("--version").stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok() {
+                return Ok(path.clone());
+            }
+        }
+    }
+
+    // Fallback: ask the user's login shell for the PATH
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Ok(output) = StdCommand::new("/bin/bash")
+            .args(["-lc", "which node"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .output()
+        {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path.is_empty() && std::path::Path::new(&path).exists() {
+                    return Ok(path);
+                }
+            }
+        }
+        if let Ok(output) = StdCommand::new("/bin/zsh")
+            .args(["-lc", "which node"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .output()
+        {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path.is_empty() && std::path::Path::new(&path).exists() {
+                    return Ok(path);
+                }
+            }
+        }
+    }
+
     #[cfg(target_os = "windows")]
     {
-        // Common Windows install paths
         for path in &[
             r"C:\Program Files\nodejs\node.exe",
             r"C:\Program Files (x86)\nodejs\node.exe",
@@ -130,6 +191,7 @@ fn find_node() -> Result<String, String> {
             }
         }
     }
+
     Err("Node.js is not installed. Download it from https://nodejs.org (LTS version).".into())
 }
 
