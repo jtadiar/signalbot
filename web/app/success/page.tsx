@@ -81,7 +81,10 @@ function SuccessContent() {
                 <li>1. Copy your license key above</li>
                 <li>2. Install <a href="https://nodejs.org" target="_blank" className="text-[var(--cyan)] hover:underline">Node.js</a> if you haven&apos;t already (free, one-click)</li>
                 <li>3. Download the installer for your OS below</li>
-                <li>4. Open the app, paste your key, and complete setup</li>
+                <li>4. <strong className="text-white">macOS only:</strong> open Terminal and run:<br />
+                  <code className="bg-[#161b22] px-2 py-1 rounded text-xs mt-1 inline-block">xattr -cr /Applications/HL\ Signalbot.app</code>
+                </li>
+                <li>5. Open the app, paste your key, and complete setup</li>
               </ol>
             </div>
 
