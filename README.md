@@ -49,19 +49,24 @@ npx tauri build
 
 ## CLI Mode (no desktop app)
 
-If you prefer the terminal, the setup wizard has a degen-styled interactive flow:
+If you prefer the terminal and don't need the desktop UI, you only need Node.js:
 
 ```bash
-node ./bot/cli.mjs setup
+git clone https://github.com/jtadiar/signalbot.git
+cd signalbot/bot
+npm install
+node cli.mjs setup
 ```
+
+The setup wizard walks you through wallet, private key, funding, Telegram, and risk config — all styled with a degen terminal aesthetic.
 
 Then start the bot:
 
 ```bash
-node ./bot/cli.mjs --config ./bot/config.json
+node cli.mjs
 ```
 
-Use `--no-banner` to skip the ASCII art header.
+No Rust, no Tauri, no desktop app required. Use `--no-banner` to skip the ASCII art header.
 
 ## How It Works
 
