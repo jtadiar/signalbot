@@ -142,28 +142,41 @@ fn is_bot_running(state: State<BotState>) -> bool {
 
 #[tauri::command]
 async fn validate_license(key: String) -> Result<bool, String> {
-    if key.trim().is_empty() {
+    let key = key.trim().to_uppercase();
+    if key.is_empty() {
         return Ok(false);
     }
 
-    // Validate against the license API
+    // Try online validation first
     let api_url = option_env!("LICENSE_API_URL").unwrap_or("https://signalbot.vercel.app");
     let url = format!("{}/api/validate", api_url);
 
-    let client = reqwest::Client::new();
-    let resp = client
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .unwrap_or_default();
+
+    match client
         .post(&url)
-        .json(&serde_json::json!({ "key": key.trim() }))
+        .json(&serde_json::json!({ "key": &key }))
         .send()
         .await
-        .map_err(|e| format!("License check failed: {}", e))?;
+    {
+        Ok(resp) => {
+            if let Ok(body) = resp.json::<serde_json::Value>().await {
+                return Ok(body["valid"].as_bool().unwrap_or(false));
+            }
+        }
+        Err(_) => {}
+    }
 
-    let body: serde_json::Value = resp
-        .json()
-        .await
-        .map_err(|e| format!("Invalid response: {}", e))?;
+    // Offline fallback: accept properly formatted keys (SB-XXXX-XXXX-XXXX-XXXX)
+    let valid_format = key.starts_with("SB-")
+        && key.len() == 22
+        && key.split('-').count() == 5
+        && key.split('-').skip(1).all(|s| s.len() == 4 && s.chars().all(|c| c.is_ascii_alphanumeric()));
 
-    Ok(body["valid"].as_bool().unwrap_or(false))
+    Ok(valid_format)
 }
 
 #[tauri::command]
