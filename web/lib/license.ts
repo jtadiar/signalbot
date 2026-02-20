@@ -6,7 +6,6 @@ const STORE_NAME = "licenses";
 export interface LicenseRecord {
   key: string;
   email: string;
-  stripeSessionId: string;
   createdAt: string;
   active: boolean;
 }
@@ -42,20 +41,18 @@ export function generateKey(): string {
   return `SB-${segments.join("-")}`;
 }
 
-export async function createLicense(
-  email: string,
-  stripeSessionId: string
-): Promise<string> {
+export async function createLicense(email: string): Promise<string> {
   const records = await loadRecords();
 
-  const existing = records.find((r) => r.stripeSessionId === stripeSessionId);
+  const existing = records.find(
+    (r) => r.email === email.trim().toLowerCase() && r.active
+  );
   if (existing) return existing.key;
 
   const key = generateKey();
   records.push({
     key,
-    email,
-    stripeSessionId,
+    email: email.trim().toLowerCase(),
     createdAt: new Date().toISOString(),
     active: true,
   });

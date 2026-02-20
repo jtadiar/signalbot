@@ -1,33 +1,18 @@
-import { NextResponse } from "next/server";
-import { getStripe } from "@/lib/stripe";
+import { NextRequest, NextResponse } from "next/server";
+import { createLicense } from "@/lib/license";
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   try {
-    const stripe = getStripe();
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      payment_method_types: ["card"],
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: "Signalbot License",
-              description:
-                "Lifetime license for HL Signalbot — automated Hyperliquid trading bot",
-            },
-            unit_amount: 9900,
-          },
-          quantity: 1,
-        },
-      ],
-      success_url: `${process.env.NEXT_PUBLIC_URL || "http://localhost:3000"}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_URL || "http://localhost:3000"}/#pricing`,
-    });
+    const { email } = await req.json();
 
-    return NextResponse.redirect(session.url!, 303);
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+    if (!email || typeof email !== "string" || !email.includes("@")) {
+      return NextResponse.json({ error: "Valid email required." }, { status: 400 });
+    }
+
+    const key = await createLicense(email.trim().toLowerCase());
+    return NextResponse.json({ key });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

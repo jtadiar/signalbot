@@ -1,3 +1,5 @@
+import GetKeyForm from "./components/GetKeyForm";
+
 const features = [
   {
     title: "EMA/ATR Signal Engine",
@@ -50,9 +52,9 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-6">
             <a href="#features" className="text-sm text-[var(--text-muted)] hover:text-white transition">Features</a>
-            <a href="#pricing" className="text-sm text-[var(--text-muted)] hover:text-white transition">Pricing</a>
+            <a href="#pricing" className="text-sm text-[var(--text-muted)] hover:text-white transition">Get Access</a>
             <a href="#faq" className="text-sm text-[var(--text-muted)] hover:text-white transition">FAQ</a>
-            <a href="#pricing" className="btn-primary !py-2 !px-5 !text-sm">Buy Now</a>
+            <a href="#pricing" className="btn-primary !py-2 !px-5 !text-sm">Get Started</a>
           </div>
         </div>
       </nav>
@@ -76,7 +78,7 @@ export default function Home() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-            <a href="#pricing" className="btn-primary text-lg">Get Signalbot — $99</a>
+            <a href="#pricing" className="btn-primary text-lg">Get Started — Free</a>
             <a href="#features" className="btn-secondary text-lg">See Features</a>
           </div>
 
@@ -151,7 +153,7 @@ export default function Home() {
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-16">How it works</h2>
           <div className="grid md:grid-cols-3 gap-8">
             {[
-              { step: "1", title: "Buy a License", desc: "One-time payment. You instantly get a unique license key and full installation instructions." },
+              { step: "1", title: "Get Your Key", desc: "Enter your email below. You instantly get a unique license key and full installation instructions." },
               { step: "2", title: "Install & Configure", desc: "Install Node.js, clone the repo, run the setup wizard. Enter your wallet key, risk params, and TP/SL settings." },
               { step: "3", title: "Start Trading", desc: "Enter your license key, hit Start. The bot scans for EMA/ATR signals every 20 seconds and executes trades automatically." },
             ].map((s) => (
@@ -165,16 +167,16 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Pricing */}
+      {/* Get Access */}
       <section id="pricing" className="py-20 px-6 border-t border-[var(--border)]">
         <div className="max-w-lg mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">One-Time Payment</h2>
-          <p className="text-[var(--text-muted)] mb-12">No subscriptions. No recurring fees. Pay once, trade forever.</p>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">Get Access</h2>
+          <p className="text-[var(--text-muted)] mb-12">Enter your email to get a license key. Free during early access.</p>
 
           <div className="card glow-green !p-8">
             <div className="text-sm text-[var(--neon)] font-semibold uppercase tracking-wider mb-2">Signalbot License</div>
-            <div className="text-5xl font-black mb-2">$99</div>
-            <div className="text-[var(--text-muted)] mb-8">Lifetime access</div>
+            <div className="text-5xl font-black mb-1 line-through text-[var(--text-muted)]">$99</div>
+            <div className="text-[var(--neon)] font-bold text-xl mb-6">FREE — Early Access</div>
 
             <ul className="text-left space-y-3 mb-8">
               {[
@@ -193,14 +195,10 @@ export default function Home() {
               ))}
             </ul>
 
-            <form action="/api/checkout" method="POST">
-              <button type="submit" className="btn-primary w-full justify-center text-lg">
-                Buy Now — $99
-              </button>
-            </form>
+            <GetKeyForm />
 
             <p className="text-xs text-[var(--text-muted)] mt-4">
-              Secure payment via Stripe. License key delivered instantly.
+              License key delivered instantly. No credit card required.
             </p>
           </div>
         </div>
@@ -213,12 +211,12 @@ export default function Home() {
           <div className="space-y-6">
             {[
               { q: "Is my private key safe?", a: "Yes. Your private key is stored locally on your machine with restrictive file permissions (owner-only). It is never transmitted, logged, or uploaded anywhere. All trades execute directly from your device to Hyperliquid." },
-              { q: "What do I need to run the bot?", a: "Node.js (free, one-click install from nodejs.org) and a Hyperliquid account with USDC deposited. After purchase, you'll get step-by-step install instructions." },
+              { q: "What do I need to run the bot?", a: "Node.js (free, one-click install from nodejs.org) and a Hyperliquid account with USDC deposited. After getting your key, you'll see step-by-step install instructions." },
               { q: "Can I customize the trading strategy?", a: "Yes. Every parameter is configurable: TP distances, trailing stop tightness, leverage, risk per trade, signal sensitivity, cooldowns, and more. See the CONFIGURATION.md guide." },
               { q: "Does it work on Mac and Windows?", a: "Yes. The CLI runs on any platform with Node.js — macOS, Windows, and Linux." },
-              { q: "Is this a subscription?", a: "No. One-time $99 payment for lifetime access, including all future updates." },
+              { q: "Is this free?", a: "Yes, Signalbot is free during early access. Pricing may change in the future — get your key now to lock in free access." },
               { q: "What pairs does it trade?", a: "Currently BTC-PERP on Hyperliquid. Additional pairs may be added in future updates." },
-              { q: "How do I get my license key?", a: "Immediately after payment, you'll see a success page with your unique license key and full installation instructions. Keep the key safe — you'll enter it when you first launch the bot." },
+              { q: "How do I get my license key?", a: "Enter your email on this page. You'll instantly get your unique license key and full installation instructions." },
             ].map((faq) => (
               <div key={faq.q} className="card">
                 <h3 className="font-semibold mb-2">{faq.q}</h3>
@@ -237,7 +235,7 @@ export default function Home() {
             <span className="font-bold">SIGNALBOT</span>
           </div>
           <div className="flex items-center gap-6 text-sm text-[var(--text-muted)]">
-            <a href="#pricing" className="hover:text-white transition">Buy</a>
+            <a href="#pricing" className="hover:text-white transition">Get Access</a>
             <a href="#faq" className="hover:text-white transition">FAQ</a>
             <span>Built for Hyperliquid</span>
           </div>
