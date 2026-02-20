@@ -141,11 +141,29 @@ fn is_bot_running(state: State<BotState>) -> bool {
 }
 
 #[tauri::command]
-fn validate_license(key: String) -> Result<bool, String> {
+async fn validate_license(key: String) -> Result<bool, String> {
     if key.trim().is_empty() {
         return Ok(false);
     }
-    Ok(true)
+
+    // Validate against the license API
+    let api_url = option_env!("LICENSE_API_URL").unwrap_or("https://signalbot.vercel.app");
+    let url = format!("{}/api/validate", api_url);
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(&url)
+        .json(&serde_json::json!({ "key": key.trim() }))
+        .send()
+        .await
+        .map_err(|e| format!("License check failed: {}", e))?;
+
+    let body: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("Invalid response: {}", e))?;
+
+    Ok(body["valid"].as_bool().unwrap_or(false))
 }
 
 #[tauri::command]
