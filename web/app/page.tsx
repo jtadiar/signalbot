@@ -154,8 +154,8 @@ export default function Home() {
           <div className="grid md:grid-cols-3 gap-8">
             {[
               { step: "1", title: "Get Your Key", desc: "Enter your email below. You instantly get a unique license key and full installation instructions." },
-              { step: "2", title: "Install & Configure", desc: "Install Node.js, clone the repo, run the setup wizard. Enter your wallet key, risk params, and TP/SL settings." },
-              { step: "3", title: "Start Trading", desc: "Enter your license key, hit Start. The bot scans for EMA/ATR signals every 20 seconds and executes trades automatically." },
+              { step: "2", title: "Install & Launch", desc: "Install Node.js and Rust, clone the repo, and run one command to launch the desktop app." },
+              { step: "3", title: "Start Trading", desc: "Enter your license key, configure your wallet and risk params, hit Start. The bot trades automatically 24/7." },
             ].map((s) => (
               <div key={s.step} className="text-center">
                 <div className="w-12 h-12 rounded-full border-2 border-[var(--neon)] flex items-center justify-center mx-auto mb-4 text-[var(--neon)] font-bold text-lg">{s.step}</div>
@@ -211,7 +211,7 @@ export default function Home() {
           <div className="space-y-6">
             {[
               { q: "Is my private key safe?", a: "Yes. Your private key is stored locally on your machine with restrictive file permissions (owner-only). It is never transmitted, logged, or uploaded anywhere. All trades execute directly from your device to Hyperliquid." },
-              { q: "What do I need to run the bot?", a: "Node.js (free, one-click install from nodejs.org) and a Hyperliquid account with USDC deposited. After getting your key, you'll see step-by-step install instructions." },
+              { q: "What do I need to run the bot?", a: "Node.js and Rust (both free, quick installs), plus a Hyperliquid account with USDC deposited. After getting your key, you'll see step-by-step install instructions." },
               { q: "Can I customize the trading strategy?", a: "Yes. Every parameter is configurable: TP distances, trailing stop tightness, leverage, risk per trade, signal sensitivity, cooldowns, and more. See the CONFIGURATION.md guide." },
               { q: "Does it work on Mac and Windows?", a: "Yes. The CLI runs on any platform with Node.js — macOS, Windows, and Linux." },
               { q: "Is this free?", a: "Yes, Signalbot is free during early access. Pricing may change in the future — get your key now to lock in free access." },

@@ -55,12 +55,17 @@ function SuccessContent() {
           <div className="flex gap-4">
             <div className="w-8 h-8 rounded-full border-2 border-[var(--neon)] flex items-center justify-center text-[var(--neon)] font-bold text-sm shrink-0">1</div>
             <div>
-              <h3 className="font-semibold mb-1">Install Node.js</h3>
-              <p className="text-sm text-[var(--text-muted)]">
-                Download and install the LTS version from{" "}
-                <a href="https://nodejs.org" target="_blank" className="text-[var(--cyan)] hover:underline">nodejs.org</a>
-                {" "}(free, one-click installer).
-              </p>
+              <h3 className="font-semibold mb-1">Install prerequisites</h3>
+              <p className="text-sm text-[var(--text-muted)] mb-2">You need two things installed (both free):</p>
+              <ul className="text-sm text-[var(--text-muted)] space-y-1 mb-2">
+                <li>• <a href="https://nodejs.org" target="_blank" className="text-[var(--cyan)] hover:underline">Node.js</a> — download the LTS version (one-click installer)</li>
+                <li>• <a href="https://rustup.rs" target="_blank" className="text-[var(--cyan)] hover:underline">Rust</a> — install by running this in your terminal:</li>
+              </ul>
+              <div className="bg-[#0d1117] border border-[#30363d] rounded-lg p-4 font-mono text-sm leading-relaxed overflow-x-auto">
+                <div className="text-[var(--neon)]">curl --proto &apos;=https&apos; --tlsv1.2 -sSf https://sh.rustup.rs | sh</div>
+                <div className="text-[var(--neon)]">source &quot;$HOME/.cargo/env&quot;</div>
+              </div>
+              <p className="text-xs text-[var(--text-muted)] mt-2">Windows users: download the Rust installer from <a href="https://rustup.rs" target="_blank" className="text-[var(--cyan)] hover:underline">rustup.rs</a> instead.</p>
             </div>
           </div>
 
@@ -68,12 +73,13 @@ function SuccessContent() {
           <div className="flex gap-4">
             <div className="w-8 h-8 rounded-full border-2 border-[var(--neon)] flex items-center justify-center text-[var(--neon)] font-bold text-sm shrink-0">2</div>
             <div className="flex-1">
-              <h3 className="font-semibold mb-1">Clone &amp; install the bot</h3>
+              <h3 className="font-semibold mb-1">Clone &amp; install</h3>
               <p className="text-sm text-[var(--text-muted)] mb-2">Open your terminal and run:</p>
               <div className="bg-[#0d1117] border border-[#30363d] rounded-lg p-4 font-mono text-sm leading-relaxed overflow-x-auto">
                 <div className="text-[var(--neon)]">git clone https://github.com/jtadiar/signalbot.git</div>
-                <div className="text-[var(--neon)]">cd signalbot/bot</div>
+                <div className="text-[var(--neon)]">cd signalbot</div>
                 <div className="text-[var(--neon)]">npm install</div>
+                <div className="text-[var(--neon)]">cd bot &amp;&amp; npm install &amp;&amp; cd ..</div>
               </div>
             </div>
           </div>
@@ -82,10 +88,10 @@ function SuccessContent() {
           <div className="flex gap-4">
             <div className="w-8 h-8 rounded-full border-2 border-[var(--neon)] flex items-center justify-center text-[var(--neon)] font-bold text-sm shrink-0">3</div>
             <div className="flex-1">
-              <h3 className="font-semibold mb-1">Run the setup wizard</h3>
-              <p className="text-sm text-[var(--text-muted)] mb-2">Configure your wallet, risk parameters, TP/SL, and Telegram:</p>
+              <h3 className="font-semibold mb-1">Launch the desktop app</h3>
+              <p className="text-sm text-[var(--text-muted)] mb-2">Build and open the app (first run takes a few minutes to compile):</p>
               <div className="bg-[#0d1117] border border-[#30363d] rounded-lg p-4 font-mono text-sm leading-relaxed overflow-x-auto">
-                <div className="text-[var(--neon)]">node cli.mjs setup</div>
+                <div className="text-[var(--neon)]">npx tauri dev</div>
               </div>
             </div>
           </div>
@@ -94,13 +100,10 @@ function SuccessContent() {
           <div className="flex gap-4">
             <div className="w-8 h-8 rounded-full border-2 border-[var(--neon)] flex items-center justify-center text-[var(--neon)] font-bold text-sm shrink-0">4</div>
             <div className="flex-1">
-              <h3 className="font-semibold mb-1">Enter your license key &amp; start trading</h3>
-              <p className="text-sm text-[var(--text-muted)] mb-2">
-                Start the bot and paste your license key when prompted:
+              <h3 className="font-semibold mb-1">Activate &amp; configure</h3>
+              <p className="text-sm text-[var(--text-muted)]">
+                The app will open and ask for your license key — paste the key above. Then follow the setup wizard to enter your wallet, risk parameters, and TP/SL settings. Hit Start and you&apos;re trading.
               </p>
-              <div className="bg-[#0d1117] border border-[#30363d] rounded-lg p-4 font-mono text-sm leading-relaxed overflow-x-auto">
-                <div className="text-[var(--neon)]">node cli.mjs</div>
-              </div>
             </div>
           </div>
         </div>
