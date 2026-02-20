@@ -20,10 +20,14 @@ async function getLatestReleaseAssets(): Promise<
 
 function findAsset(assets: { name: string; url: string }[], platform: string) {
   if (platform === "mac") {
-    return assets.find((a) => a.name.endsWith(".dmg"));
+    return (
+      assets.find((a) => a.name.includes("universal") && a.name.endsWith(".dmg")) ||
+      assets.find((a) => a.name.endsWith(".dmg"))
+    );
   }
   if (platform === "windows") {
     return (
+      assets.find((a) => a.name.endsWith("-setup.exe")) ||
       assets.find((a) => a.name.endsWith(".exe")) ||
       assets.find((a) => a.name.endsWith(".msi"))
     );
