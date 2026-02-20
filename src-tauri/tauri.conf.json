@@ -46,6 +46,8 @@
       "../bot/signal_engine.mjs": "bot/signal_engine.mjs",
       "../bot/hl_info.mjs": "bot/hl_info.mjs",
       "../bot/setup.mjs": "bot/setup.mjs",
+      "../bot/close.mjs": "bot/close.mjs",
+      "../bot/ui.mjs": "bot/ui.mjs",
       "../bot/config.example.json": "bot/config.example.json",
       "../bot/.env.example": "bot/.env.example",
       "../bot/package.json": "bot/package.json",
