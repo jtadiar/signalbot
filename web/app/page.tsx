@@ -1,4 +1,4 @@
-import Link from "next/link";
+const GITHUB_RELEASES = "https://github.com/jtadiar/signalbot/releases/latest";
 
 const features = [
   {
@@ -53,6 +53,7 @@ export default function Home() {
           <div className="flex items-center gap-6">
             <a href="#features" className="text-sm text-[var(--text-muted)] hover:text-white transition">Features</a>
             <a href="#pricing" className="text-sm text-[var(--text-muted)] hover:text-white transition">Pricing</a>
+            <a href="#download" className="text-sm text-[var(--text-muted)] hover:text-white transition">Download</a>
             <a href="#faq" className="text-sm text-[var(--text-muted)] hover:text-white transition">FAQ</a>
             <a href="#pricing" className="btn-primary !py-2 !px-5 !text-sm">Get Started</a>
           </div>
@@ -79,7 +80,7 @@ export default function Home() {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
             <a href="#pricing" className="btn-primary text-lg">Buy License — $99</a>
-            <a href="https://github.com/jtadiar/signalbot" target="_blank" className="btn-secondary text-lg">View Source</a>
+            <a href="#download" className="btn-secondary text-lg">Download</a>
           </div>
 
           {/* Stats */}
@@ -154,9 +155,9 @@ export default function Home() {
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-16">How it works</h2>
           <div className="grid md:grid-cols-3 gap-8">
             {[
-              { step: "1", title: "Buy & Download", desc: "Purchase a license key, clone the repo, and run the setup wizard. Takes 5 minutes." },
-              { step: "2", title: "Configure", desc: "Set your wallet, risk parameters, TP/SL levels, and optional Telegram notifications." },
-              { step: "3", title: "Start Trading", desc: "The bot scans for EMA/ATR signals every 20 seconds and executes trades automatically." },
+              { step: "1", title: "Buy & Download", desc: "Purchase a license key and download the installer for your OS. No terminal or coding required." },
+              { step: "2", title: "Configure", desc: "Open the app, enter your license key, and follow the setup wizard: wallet, risk parameters, TP/SL, Telegram." },
+              { step: "3", title: "Start Trading", desc: "Hit Start. The bot scans for EMA/ATR signals every 20 seconds and executes trades on Hyperliquid automatically." },
             ].map((s) => (
               <div key={s.step} className="text-center">
                 <div className="w-12 h-12 rounded-full border-2 border-[var(--neon)] flex items-center justify-center mx-auto mb-4 text-[var(--neon)] font-bold text-lg">{s.step}</div>
@@ -209,6 +210,39 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Download */}
+      <section id="download" className="py-20 px-6 border-t border-[var(--border)]">
+        <div className="max-w-3xl mx-auto text-center">
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">Download</h2>
+          <p className="text-[var(--text-muted)] mb-4">
+            Grab the installer for your platform. Requires <a href="https://nodejs.org" target="_blank" className="text-[var(--cyan)] hover:underline">Node.js</a> (free, one-click install).
+          </p>
+          <p className="text-sm text-[var(--text-muted)] mb-12">
+            No terminal, no Rust, no compiling. Download, install, open, trade.
+          </p>
+
+          <div className="grid md:grid-cols-2 gap-6 max-w-xl mx-auto mb-10">
+            <a href={GITHUB_RELEASES} target="_blank" className="card glow-green !p-6 text-center hover:!border-[var(--neon)] transition group">
+              <div className="text-3xl mb-3">🍎</div>
+              <h3 className="font-bold text-lg mb-1">macOS</h3>
+              <p className="text-sm text-[var(--text-muted)] mb-3">Apple Silicon &amp; Intel</p>
+              <span className="text-[var(--neon)] text-sm font-semibold group-hover:underline">Download .dmg</span>
+            </a>
+
+            <a href={GITHUB_RELEASES} target="_blank" className="card glow-cyan !p-6 text-center hover:!border-[var(--cyan)] transition group">
+              <div className="text-3xl mb-3">🪟</div>
+              <h3 className="font-bold text-lg mb-1">Windows</h3>
+              <p className="text-sm text-[var(--text-muted)] mb-3">Windows 10 / 11 (64-bit)</p>
+              <span className="text-[var(--cyan)] text-sm font-semibold group-hover:underline">Download .msi</span>
+            </a>
+          </div>
+
+          <p className="text-sm text-[var(--text-muted)]">
+            Developers: you can also <a href="https://github.com/jtadiar/signalbot" target="_blank" className="text-[var(--cyan)] hover:underline">build from source</a> or use <a href="https://github.com/jtadiar/signalbot/blob/main/bot/CONFIGURATION.md" target="_blank" className="text-[var(--cyan)] hover:underline">CLI mode</a>.
+          </p>
+        </div>
+      </section>
+
       {/* FAQ */}
       <section id="faq" className="py-20 px-6 border-t border-[var(--border)]">
         <div className="max-w-2xl mx-auto">
@@ -216,7 +250,7 @@ export default function Home() {
           <div className="space-y-6">
             {[
               { q: "Is my private key safe?", a: "Yes. Your private key is stored locally on your machine with restrictive file permissions (owner-only). It is never transmitted, logged, or uploaded anywhere. All trades execute directly from your device to Hyperliquid." },
-              { q: "What do I need to run the bot?", a: "Node.js (free, from nodejs.org) and a Hyperliquid account with USDC deposited. For the desktop app, you also need Rust (for building from source) — or just download the pre-built installer." },
+              { q: "What do I need to run the bot?", a: "Just Node.js (free, one-click install from nodejs.org) and a Hyperliquid account with USDC deposited. Download the installer for your OS, open the app, and you're ready. No terminal or coding required." },
               { q: "Can I customize the trading strategy?", a: "Yes. Every parameter is configurable: TP distances, trailing stop tightness, leverage, risk per trade, signal sensitivity, cooldowns, and more. See the CONFIGURATION.md guide." },
               { q: "Does it work on Mac and Windows?", a: "Yes. The desktop app builds for both macOS and Windows. The CLI mode works on any platform with Node.js." },
               { q: "Is this a subscription?", a: "No. One-time payment for lifetime access, including all future updates." },
@@ -239,6 +273,7 @@ export default function Home() {
             <span className="font-bold">SIGNALBOT</span>
           </div>
           <div className="flex items-center gap-6 text-sm text-[var(--text-muted)]">
+            <a href="#download" className="hover:text-white transition">Download</a>
             <a href="https://github.com/jtadiar/signalbot" target="_blank" className="hover:text-white transition">GitHub</a>
             <a href="https://github.com/jtadiar/signalbot/blob/main/bot/CONFIGURATION.md" target="_blank" className="hover:text-white transition">Docs</a>
             <span>Built for Hyperliquid</span>

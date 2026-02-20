@@ -76,20 +76,28 @@ function SuccessContent() {
               <h3 className="font-semibold">Next steps:</h3>
               <ol className="space-y-2 text-sm text-[var(--text-muted)]">
                 <li>1. Copy your license key above</li>
-                <li>2. Download and install the app (or clone the repo)</li>
-                <li>3. Paste the key when prompted on first launch</li>
-                <li>4. Complete the setup wizard and start trading</li>
+                <li>2. Install <a href="https://nodejs.org" target="_blank" className="text-[var(--cyan)] hover:underline">Node.js</a> if you haven&apos;t already (free, one-click)</li>
+                <li>3. Download the installer for your OS below</li>
+                <li>4. Open the app, paste your key, and complete setup</li>
               </ol>
             </div>
 
-            <div className="flex flex-col gap-3">
-              <a href="https://github.com/jtadiar/signalbot" className="btn-primary w-full justify-center">
-                Download from GitHub
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <a href="https://github.com/jtadiar/signalbot/releases/latest" target="_blank" className="card !p-4 text-center hover:!border-[var(--neon)] transition">
+                <div className="text-xl mb-1">🍎</div>
+                <div className="text-sm font-semibold">macOS</div>
+                <div className="text-xs text-[var(--neon)]">.dmg</div>
               </a>
-              <a href="/" className="btn-secondary w-full justify-center">
-                Back to Home
+              <a href="https://github.com/jtadiar/signalbot/releases/latest" target="_blank" className="card !p-4 text-center hover:!border-[var(--cyan)] transition">
+                <div className="text-xl mb-1">🪟</div>
+                <div className="text-sm font-semibold">Windows</div>
+                <div className="text-xs text-[var(--cyan)]">.msi</div>
               </a>
             </div>
+
+            <a href="/" className="btn-secondary w-full justify-center">
+              Back to Home
+            </a>
 
             <p className="text-xs text-[var(--text-muted)] mt-6">
               Save this key somewhere safe. It&apos;s also been sent to your email.
