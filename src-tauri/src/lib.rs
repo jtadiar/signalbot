@@ -27,9 +27,7 @@ impl Default for BotState {
 // --- Path Resolution ---
 
 fn find_bot_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
-    // We need bot/ with node_modules, so prefer the real project dir over resource copies.
-
-    // 1. Check cwd and its parent (in dev, cwd is often src-tauri/)
+    // 1. Dev mode: project root bot/ with node_modules already installed
     if let Ok(cwd) = std::env::current_dir() {
         for base in &[cwd.clone(), cwd.join("..").canonicalize().unwrap_or(cwd.clone())] {
             let d = base.join("bot");
@@ -39,7 +37,20 @@ fn find_bot_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
         }
     }
 
-    // 2. Check relative to executable (for .app bundles)
+    // 2. Production: use a writable runtime directory with deps installed
+    let runtime_dir = user_data_dir()?.join("bot");
+    if runtime_dir.join("index.mjs").exists() && runtime_dir.join("node_modules").exists() {
+        return Ok(runtime_dir);
+    }
+
+    // 3. Copy bundled bot files to the writable runtime dir and install deps
+    let resource_bot = find_resource_bot_dir(app)?;
+    provision_bot_runtime(&resource_bot, &runtime_dir)?;
+
+    Ok(runtime_dir)
+}
+
+fn find_resource_bot_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             for base in &[dir.to_path_buf(), dir.join("../Resources")] {
@@ -50,29 +61,73 @@ fn find_bot_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
             }
         }
     }
-
-    // 3. Tauri resource directory (production bundles)
     if let Ok(res) = app.path().resource_dir() {
         let d = res.join("bot");
         if d.join("index.mjs").exists() {
             return Ok(d);
         }
-        if res.join("index.mjs").exists() {
-            return Ok(res.clone());
-        }
     }
+    Err("Cannot locate bundled bot files. Reinstall the app.".into())
+}
 
-    // 4. Fallback: cwd/bot without requiring node_modules (user may need to npm install)
-    if let Ok(cwd) = std::env::current_dir() {
-        for base in &[cwd.clone(), cwd.join("..").canonicalize().unwrap_or(cwd.clone())] {
-            let d = base.join("bot");
-            if d.join("index.mjs").exists() {
-                return Ok(d);
+fn provision_bot_runtime(
+    source: &std::path::Path,
+    target: &std::path::Path,
+) -> Result<(), String> {
+    std::fs::create_dir_all(target)
+        .map_err(|e| format!("Cannot create bot runtime dir: {}", e))?;
+
+    // Copy all .mjs, .json, and .example files
+    if let Ok(entries) = std::fs::read_dir(source) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.ends_with(".mjs")
+                || name.ends_with(".json")
+                || name.ends_with(".example")
+            {
+                let dest = target.join(&name);
+                let _ = std::fs::copy(entry.path(), &dest);
             }
         }
     }
 
-    Err("Cannot locate bot/ directory. Reinstall the app or run from the project root.".into())
+    // Run npm install to get node_modules
+    let node = find_node()?;
+    let npm = find_npm(&node)?;
+
+    let output = StdCommand::new(&npm)
+        .arg("install")
+        .arg("--production")
+        .current_dir(target)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|e| format!("Failed to run npm install: {}", e))?;
+
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("npm install failed: {}", err));
+    }
+
+    Ok(())
+}
+
+fn find_npm(node_path: &str) -> Result<String, String> {
+    // npm is typically next to node
+    let node = std::path::Path::new(node_path);
+    if let Some(dir) = node.parent() {
+        let npm = dir.join("npm");
+        if npm.exists() {
+            return Ok(npm.to_string_lossy().to_string());
+        }
+        // Windows
+        let npm_cmd = dir.join("npm.cmd");
+        if npm_cmd.exists() {
+            return Ok(npm_cmd.to_string_lossy().to_string());
+        }
+    }
+    // Fallback: just try "npm"
+    Ok("npm".into())
 }
 
 /// Writable directory for user config (outside the app bundle).
