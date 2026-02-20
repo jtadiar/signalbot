@@ -265,7 +265,7 @@ async fn validate_license(key: String) -> Result<bool, String> {
     }
 
     // Try online validation first
-    let api_url = option_env!("LICENSE_API_URL").unwrap_or("https://signalbot.vercel.app");
+    let api_url = option_env!("LICENSE_API_URL").unwrap_or("https://hlsignalbot.netlify.app");
     let url = format!("{}/api/validate", api_url);
 
     let client = reqwest::Client::builder()
