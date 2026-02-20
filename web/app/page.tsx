@@ -1,5 +1,3 @@
-const GITHUB_RELEASES = "https://github.com/jtadiar/signalbot/releases/latest";
-
 const features = [
   {
     title: "EMA/ATR Signal Engine",
@@ -79,8 +77,8 @@ export default function Home() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-            <a href="#pricing" className="btn-primary text-lg">Buy License — $99</a>
-            <a href="#download" className="btn-secondary text-lg">Download</a>
+            <a href="#pricing" className="btn-primary text-lg">Get Started — $99</a>
+            <a href="#download" className="btn-secondary text-lg">See Platforms</a>
           </div>
 
           {/* Stats */}
@@ -213,32 +211,29 @@ export default function Home() {
       {/* Download */}
       <section id="download" className="py-20 px-6 border-t border-[var(--border)]">
         <div className="max-w-3xl mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Download</h2>
-          <p className="text-[var(--text-muted)] mb-4">
-            Grab the installer for your platform. Requires <a href="https://nodejs.org" target="_blank" className="text-[var(--cyan)] hover:underline">Node.js</a> (free, one-click install).
-          </p>
-          <p className="text-sm text-[var(--text-muted)] mb-12">
-            No terminal, no Rust, no compiling. Download, install, open, trade.
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">Available on macOS &amp; Windows</h2>
+          <p className="text-[var(--text-muted)] mb-12">
+            No terminal, no compiling. Buy a license and get instant access to the installer for your platform.
           </p>
 
           <div className="grid md:grid-cols-2 gap-6 max-w-xl mx-auto mb-10">
-            <a href={GITHUB_RELEASES} target="_blank" className="card glow-green !p-6 text-center hover:!border-[var(--neon)] transition group">
+            <div className="card !p-6 text-center">
               <div className="text-3xl mb-3">🍎</div>
               <h3 className="font-bold text-lg mb-1">macOS</h3>
-              <p className="text-sm text-[var(--text-muted)] mb-3">Apple Silicon &amp; Intel</p>
-              <span className="text-[var(--neon)] text-sm font-semibold group-hover:underline">Download .dmg</span>
-            </a>
+              <p className="text-sm text-[var(--text-muted)]">Apple Silicon &amp; Intel (.dmg)</p>
+            </div>
 
-            <a href={GITHUB_RELEASES} target="_blank" className="card glow-cyan !p-6 text-center hover:!border-[var(--cyan)] transition group">
+            <div className="card !p-6 text-center">
               <div className="text-3xl mb-3">🪟</div>
               <h3 className="font-bold text-lg mb-1">Windows</h3>
-              <p className="text-sm text-[var(--text-muted)] mb-3">Windows 10 / 11 (64-bit)</p>
-              <span className="text-[var(--cyan)] text-sm font-semibold group-hover:underline">Download .msi</span>
-            </a>
+              <p className="text-sm text-[var(--text-muted)]">Windows 10 / 11 (.msi)</p>
+            </div>
           </div>
 
-          <p className="text-sm text-[var(--text-muted)]">
-            Developers: you can also <a href="https://github.com/jtadiar/signalbot" target="_blank" className="text-[var(--cyan)] hover:underline">build from source</a> or use <a href="https://github.com/jtadiar/signalbot/blob/main/bot/CONFIGURATION.md" target="_blank" className="text-[var(--cyan)] hover:underline">CLI mode</a>.
+          <a href="#pricing" className="btn-primary text-lg">Buy License to Download</a>
+
+          <p className="text-sm text-[var(--text-muted)] mt-6">
+            Only requires <a href="https://nodejs.org" target="_blank" className="text-[var(--cyan)] hover:underline">Node.js</a> (free). Download links are provided after purchase.
           </p>
         </div>
       </section>
