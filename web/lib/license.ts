@@ -1,8 +1,7 @@
 import crypto from "crypto";
-import fs from "fs";
-import path from "path";
+import { getStore } from "@netlify/blobs";
 
-const DB_PATH = path.join(process.cwd(), "data", "licenses.json");
+const STORE_NAME = "licenses";
 
 export interface LicenseRecord {
   key: string;
@@ -12,17 +11,22 @@ export interface LicenseRecord {
   active: boolean;
 }
 
-function ensureDb(): LicenseRecord[] {
-  const dir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (!fs.existsSync(DB_PATH)) fs.writeFileSync(DB_PATH, "[]");
-  return JSON.parse(fs.readFileSync(DB_PATH, "utf8"));
+function getDb() {
+  return getStore(STORE_NAME);
 }
 
-function saveDb(records: LicenseRecord[]) {
-  const dir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(DB_PATH, JSON.stringify(records, null, 2));
+async function loadRecords(): Promise<LicenseRecord[]> {
+  try {
+    const store = getDb();
+    const data = await store.get("all_licenses", { type: "text" });
+    if (data) return JSON.parse(data);
+  } catch {}
+  return [];
+}
+
+async function saveRecords(records: LicenseRecord[]): Promise<void> {
+  const store = getDb();
+  await store.set("all_licenses", JSON.stringify(records));
 }
 
 export function generateKey(): string {
@@ -38,8 +42,11 @@ export function generateKey(): string {
   return `SB-${segments.join("-")}`;
 }
 
-export function createLicense(email: string, stripeSessionId: string): string {
-  const records = ensureDb();
+export async function createLicense(
+  email: string,
+  stripeSessionId: string
+): Promise<string> {
+  const records = await loadRecords();
 
   const existing = records.find((r) => r.stripeSessionId === stripeSessionId);
   if (existing) return existing.key;
@@ -52,12 +59,14 @@ export function createLicense(email: string, stripeSessionId: string): string {
     createdAt: new Date().toISOString(),
     active: true,
   });
-  saveDb(records);
+  await saveRecords(records);
   return key;
 }
 
-export function validateKey(key: string): boolean {
+export async function validateKey(key: string): Promise<boolean> {
   if (!key || typeof key !== "string") return false;
-  const records = ensureDb();
-  return records.some((r) => r.key === key.trim().toUpperCase() && r.active);
+  const records = await loadRecords();
+  return records.some(
+    (r) => r.key === key.trim().toUpperCase() && r.active
+  );
 }

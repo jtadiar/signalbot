@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@netlify/blobs": "^10.7.0",
     "crypto": "^1.0.1",
     "next": "16.1.6",
     "react": "19.2.3",
@@ -16,6 +17,7 @@
     "stripe": "^20.3.1"
   },
   "devDependencies": {
+    "@netlify/plugin-nextjs": "^5.15.8",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
     const email = session.customer_details?.email || "unknown";
-    createLicense(email, session.id);
+    await createLicense(email, session.id);
   }
 
   return NextResponse.json({ received: true });

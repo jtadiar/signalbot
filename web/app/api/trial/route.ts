@@ -10,7 +10,7 @@ export async function POST(req: Request) {
     }
 
     const trialSessionId = `trial_${Date.now()}_${email}`;
-    const key = createLicense(email.trim().toLowerCase(), trialSessionId);
+    const key = await createLicense(email.trim().toLowerCase(), trialSessionId);
 
     return NextResponse.json({ key });
   } catch (e: unknown) {

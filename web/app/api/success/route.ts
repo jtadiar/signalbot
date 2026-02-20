@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     }
 
     const email = session.customer_details?.email || "unknown";
-    const key = createLicense(email, session.id);
+    const key = await createLicense(email, session.id);
 
     return NextResponse.json({ key });
   } catch (err: unknown) {
