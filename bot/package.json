@@ -12,7 +12,11 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
+    "chalk": "^5.6.2",
     "dotenv": "^17.2.4",
-    "hyperliquid": "^1.7.7"
+    "figlet": "^1.10.0",
+    "gradient-string": "^3.0.0",
+    "hyperliquid": "^1.7.7",
+    "ora": "^9.3.0"
   }
 }
