@@ -86,15 +86,15 @@ function SuccessContent() {
             </div>
 
             <div className="grid grid-cols-2 gap-3 mb-4">
-              <a href="https://github.com/jtadiar/signalbot/releases/latest" target="_blank" className="card !p-4 text-center hover:!border-[var(--neon)] transition">
+              <a href="/api/download?platform=mac" className="card !p-4 text-center hover:!border-[var(--neon)] transition">
                 <div className="text-xl mb-1">🍎</div>
                 <div className="text-sm font-semibold">macOS</div>
-                <div className="text-xs text-[var(--neon)]">.dmg</div>
+                <div className="text-xs text-[var(--neon)]">Download .dmg</div>
               </a>
-              <a href="https://github.com/jtadiar/signalbot/releases/latest" target="_blank" className="card !p-4 text-center hover:!border-[var(--cyan)] transition">
+              <a href="/api/download?platform=windows" className="card !p-4 text-center hover:!border-[var(--cyan)] transition">
                 <div className="text-xl mb-1">🪟</div>
                 <div className="text-sm font-semibold">Windows</div>
-                <div className="text-xs text-[var(--cyan)]">.msi</div>
+                <div className="text-xs text-[var(--cyan)]">Download .exe</div>
               </a>
             </div>
 
