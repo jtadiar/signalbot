@@ -70,12 +70,15 @@ export default function Settings() {
     });
   }
 
+  const [showRestartNotice, setShowRestartNotice] = useState(false);
+
   async function handleSaveConfig() {
     setError('');
     try {
       await writeConfig(config);
       localStorage.setItem('bot_config', JSON.stringify(config));
       setSaved(true);
+      setShowRestartNotice(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e) {
       setError(e?.message || 'Failed to save.');
@@ -449,6 +452,27 @@ export default function Settings() {
           </div>
         </div>
       </div>
+
+      {showRestartNotice && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }} onClick={() => setShowRestartNotice(false)}>
+          <div style={{
+            background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+            borderRadius: 12, padding: '32px 40px', maxWidth: 400, textAlign: 'center',
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 28, marginBottom: 12 }}>&#x26A0;&#xFE0F;</div>
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Settings Saved</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6, marginBottom: 20 }}>
+              Restart the bot for your changes to take effect.
+            </p>
+            <button className="btn btn-primary" onClick={() => setShowRestartNotice(false)} style={{ minWidth: 120 }}>
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
