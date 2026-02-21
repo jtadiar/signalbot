@@ -11,6 +11,16 @@ function tauriEmit(evt) {
   try { process.stdout.write(JSON.stringify(evt) + '\n'); } catch {}
 }
 
+const _origFetch = globalThis.fetch;
+globalThis.fetch = async (...args) => {
+  const res = await _origFetch(...args);
+  if (!res.ok) {
+    const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '(unknown)';
+    console.error(`[fetch] ${res.status} ${res.statusText} → ${url.slice(0, 150)}`);
+  }
+  return res;
+};
+
 const DATA_DIR = process.env.DATA_DIR || path.join(homedir(), '.config', 'hl-signalbot');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 // Migrate data files from old bot/ location to DATA_DIR if needed
@@ -1173,12 +1183,17 @@ async function mainLoop(){
 }
 
 function onLoopError(e){
-  const msg = e?.message || String(e);
+  const rawMsg = e?.message || String(e);
+  const msg = rawMsg.length > 200 ? rawMsg.slice(0, 200) + '…' : rawMsg;
   state.errStreak = Math.min(20, state.errStreak + 1);
   const backoffMs = Math.min(120_000, 5_000 * Math.pow(2, Math.min(6, state.errStreak)));
   state.backoffUntilMs = Date.now() + backoffMs;
   console.error(nowIso(), 'loop err', { msg, errStreak: state.errStreak, backoffMs });
-  tauriEmit({ type: 'error', message: msg });
+  if (e?.stack) console.error('  at:', e.stack.split('\n').slice(1, 4).join('\n  '));
+  const userMsg = /socket hang up|ECONNREFUSED|ETIMEDOUT|Gateway|502|503|504|ENOTFOUND|fetch failed/i.test(rawMsg)
+    ? 'Connection error — Hyperliquid API unreachable. Retrying...'
+    : msg;
+  tauriEmit({ type: 'error', message: userMsg });
   persistState();
 }
 
