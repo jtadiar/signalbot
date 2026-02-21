@@ -169,8 +169,36 @@ export default function Dashboard() {
       </div>
 
       {lastError && (
-        <div className="card" style={{ borderColor: 'var(--red)', background: 'var(--red-bg)', marginBottom: 16 }}>
-          <div style={{ color: 'var(--red)', fontWeight: 600, fontSize: 13 }}>Error: {lastError}</div>
+        <div style={{
+          background: 'var(--red)', color: '#fff', padding: '10px 16px', borderRadius: 8,
+          marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          fontSize: 13, fontWeight: 600,
+        }}>
+          <span>
+            {/socket hang up|ECONNREFUSED|ETIMEDOUT|Gateway Timeout|503|504|ENOTFOUND|fetch failed/i.test(lastError)
+              ? 'Connection error — Hyperliquid API is unreachable. Try restarting the bot.'
+              : /EACCES|permission/i.test(lastError)
+              ? 'Permission error — check your wallet key and try restarting.'
+              : lastError.length > 120
+              ? 'Something went wrong. Try restarting the bot.'
+              : `Error: ${lastError}`}
+          </span>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            {running && (
+              <button onClick={handleRestart} disabled={starting} style={{
+                background: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', borderRadius: 6,
+                padding: '4px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              }}>
+                {starting ? 'Restarting...' : 'Restart'}
+              </button>
+            )}
+            <button onClick={() => setLastError(null)} style={{
+              background: 'none', color: 'rgba(255,255,255,0.7)', border: 'none',
+              fontSize: 16, cursor: 'pointer', lineHeight: 1, padding: '0 4px',
+            }}>
+              ×
+            </button>
+          </div>
         </div>
       )}
 
