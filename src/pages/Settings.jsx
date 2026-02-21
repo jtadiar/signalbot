@@ -232,8 +232,8 @@ export default function Settings() {
             </div>
             <div className="form-group">
               <label className="form-label">Max stop %</label>
-              <input className="form-input" type="number" step="0.001" value={config.signal?.maxStopPct || 0.035} onChange={e => update('signal.maxStopPct', Number(e.target.value))} />
-              <div className="form-hint">e.g. 0.035 = 3.5%</div>
+              <input className="form-input" type="number" step="0.1" min="0.1" max="20" value={Math.round((config.signal?.maxStopPct || 0.035) * 1000) / 10} onChange={e => update('signal.maxStopPct', Number(e.target.value) / 100)} />
+              <div className="form-hint">Reject signals with stop distance above this (e.g. 3.5 = 3.5%)</div>
             </div>
           </div>
 
@@ -252,11 +252,13 @@ export default function Settings() {
             <div className="grid-2">
               <div className="form-group">
                 <label className="form-label">Risk per trade %</label>
-                <input className="form-input" type="number" step="0.01" value={config.risk?.riskPerTradePct || 0.03} onChange={e => update('risk.riskPerTradePct', Number(e.target.value))} />
+                <input className="form-input" type="number" step="0.5" min="0.5" max="100" value={Math.round((config.risk?.riskPerTradePct || 0.03) * 1000) / 10} onChange={e => update('risk.riskPerTradePct', Number(e.target.value) / 100)} />
+                <div className="form-hint">% of equity risked per trade (e.g. 3 = 3%)</div>
               </div>
               <div className="form-group">
                 <label className="form-label">Margin use %</label>
-                <input className="form-input" type="number" step="0.05" value={config.risk?.marginUsePct || 0.75} onChange={e => update('risk.marginUsePct', Number(e.target.value))} />
+                <input className="form-input" type="number" step="1" min="1" max="100" value={Math.round((config.risk?.marginUsePct || 0.75) * 100)} onChange={e => update('risk.marginUsePct', Number(e.target.value) / 100)} />
+                <div className="form-hint">How much of your equity to use (1–100%)</div>
               </div>
             </div>
             <div className="grid-2">
@@ -277,11 +279,13 @@ export default function Settings() {
           <div className="grid-2">
             <div className="form-group">
               <label className="form-label">Stop-loss cap %</label>
-              <input className="form-input" type="number" step="0.01" value={config.exits?.stopLossPct || 0.10} onChange={e => update('exits.stopLossPct', Number(e.target.value))} />
+              <input className="form-input" type="number" step="0.5" min="0.5" max="50" value={Math.round((config.exits?.stopLossPct || 0.10) * 1000) / 10} onChange={e => update('exits.stopLossPct', Number(e.target.value) / 100)} />
+              <div className="form-hint">Max stop distance from entry (e.g. 10 = 10%)</div>
             </div>
             <div className="form-group">
               <label className="form-label">Max margin loss %</label>
-              <input className="form-input" type="number" step="0.01" value={config.exits?.maxMarginLossPct || 0.03} onChange={e => update('exits.maxMarginLossPct', Number(e.target.value))} />
+              <input className="form-input" type="number" step="0.5" min="0.5" max="100" value={Math.round((config.exits?.maxMarginLossPct || 0.03) * 1000) / 10} onChange={e => update('exits.maxMarginLossPct', Number(e.target.value) / 100)} />
+              <div className="form-hint">Max loss as % of margin used (e.g. 3 = 3%)</div>
             </div>
           </div>
           <div className="form-group">
