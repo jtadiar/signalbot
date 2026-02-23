@@ -169,9 +169,8 @@ export default function Settings() {
 
   return (
     <div>
-      <div style={{ marginBottom: 24 }}>
-        <h1 className="page-title" style={{ marginBottom: 4 }}>Settings</h1>
-        <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Bot config is written to config.json. Restart the bot after saving.</p>
+      <div style={{ marginBottom: 20 }}>
+        <h1 className="page-title" style={{ marginBottom: 0 }}>Settings</h1>
       </div>
 
       {/* Sub-tabs */}
