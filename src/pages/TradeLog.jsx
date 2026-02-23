@@ -137,7 +137,10 @@ export default function TradeLog() {
 
   return (
     <div>
-      <h1 className="page-title">Trade Log</h1>
+      <div style={{ marginBottom: 20 }}>
+        <h1 className="page-title" style={{ marginBottom: 4 }}>Trade Log</h1>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>PnL from trades.jsonl + Hyperliquid fills for accuracy.</p>
+      </div>
 
       <div className="grid-3" style={{ marginBottom: 20 }}>
         <div className="card">

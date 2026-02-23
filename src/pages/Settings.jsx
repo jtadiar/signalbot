@@ -7,6 +7,7 @@ export default function Settings() {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
+  const [hasEdits, setHasEdits] = useState(false);
   const [error, setError] = useState('');
 
   // Telegram state
@@ -60,6 +61,7 @@ export default function Settings() {
 
   function update(path, value) {
     setSaved(false);
+    setHasEdits(true);
     setConfig(prev => {
       const next = JSON.parse(JSON.stringify(prev));
       const keys = path.split('.');
@@ -78,6 +80,7 @@ export default function Settings() {
       await writeConfig(config);
       localStorage.setItem('bot_config', JSON.stringify(config));
       setSaved(true);
+      setHasEdits(false);
       setShowRestartNotice(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e) {
@@ -166,8 +169,9 @@ export default function Settings() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <h1 className="page-title" style={{ marginBottom: 0 }}>Settings</h1>
+      <div style={{ marginBottom: 24 }}>
+        <h1 className="page-title" style={{ marginBottom: 4 }}>Settings</h1>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Bot config is written to config.json. Restart the bot after saving.</p>
       </div>
 
       {/* Sub-tabs */}
@@ -200,10 +204,20 @@ export default function Settings() {
 
       {/* Configure tab */}
       <div style={{ display: tab === 'configure' ? 'block' : 'none' }}>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 16 }}>
-          {saved && <span className="success-msg">Saved!</span>}
-          {error && <span className="error-msg">{error}</span>}
-          <button className="btn btn-primary" onClick={handleSaveConfig}>Save Changes</button>
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+          marginBottom: 20, padding: 12, borderRadius: 8,
+          background: hasEdits ? 'rgba(79, 140, 255, 0.06)' : 'transparent',
+          border: hasEdits ? '1px solid rgba(79, 140, 255, 0.2)' : '1px solid transparent',
+        }}>
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+            {saved ? 'Changes saved.' : hasEdits ? 'You have unsaved changes.' : ''}
+          </span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {saved && <span className="success-msg">Saved!</span>}
+            {error && <span className="error-msg">{error}</span>}
+            <button className="btn btn-primary" onClick={handleSaveConfig}>Save Changes</button>
+          </div>
         </div>
 
         <div className="grid-2">
@@ -348,7 +362,10 @@ export default function Settings() {
           </div>
 
           <div className="form-group" style={{ marginTop: 16 }}>
-            <label className="form-label">Trailing stop (runner after TP2)</label>
+            <label className="form-label">Runner (remaining 50% after TP1/TP2)</label>
+            <p className="form-hint" style={{ marginBottom: 12 }}>
+              The runner exits when either (1) price hits the stop, or (2) signal reversal (if enabled below). They work together — whichever triggers first.
+            </p>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 8 }}>
               <input
                 type="checkbox"
@@ -358,8 +375,11 @@ export default function Settings() {
                   update('exits.trailingAfterTp2', { kind: tr.kind || 'pct', trailPct: tr.trailPct ?? 0.005, minUpdateSeconds: tr.minUpdateSeconds ?? 20, enabled: e.target.checked });
                 }}
               />
-              <span>Enable trailing stop on runner</span>
+              <span>Trailing stop</span>
             </label>
+            <div className="form-hint" style={{ marginLeft: 24, marginBottom: 8 }}>
+              When on: stop trails price (e.g. 0.5% behind). When off: stop stays at TP1 price.
+            </div>
             <div className="grid-2">
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label" style={{ fontSize: 11 }}>Trail distance (%)</label>
@@ -392,25 +412,23 @@ export default function Settings() {
                 />
               </div>
             </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Runner exit</label>
-            <select
-              className="form-input"
-              value={config.exits?.runnerExit || 'signal'}
-              onChange={e => update('exits.runnerExit', e.target.value)}
-              style={{ maxWidth: 280 }}
-            >
-              <option value="signal">Exit on signal reversal</option>
-            </select>
-            <div className="form-hint">How the remaining 50% exits after TP1/TP2 — signal = close when trend flips</div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 12 }}>
+              <input
+                type="checkbox"
+                checked={String(config.exits?.runnerExit || '').toLowerCase() === 'signal'}
+                onChange={e => update('exits.runnerExit', e.target.checked ? 'signal' : '')}
+              />
+              <span>Exit on signal reversal</span>
+            </label>
+            <div className="form-hint" style={{ marginLeft: 24 }}>
+              When on: close runner when trend flips (e.g. short → long). When off: runner only exits via stop.
+            </div>
           </div>
         </div>
 
-        <div className="card">
-          <div className="card-title">Danger Zone</div>
-          <button className="btn btn-outline" onClick={handleReset}>Reset All Settings &amp; Re-run Setup</button>
+        <div className="card" style={{ borderColor: 'rgba(248, 113, 113, 0.2)', background: 'rgba(248, 113, 113, 0.04)' }}>
+          <div className="card-title" style={{ color: 'var(--red)' }}>Danger Zone</div>
+          <button className="btn btn-outline" onClick={handleReset} style={{ borderColor: 'var(--red)', color: 'var(--red)' }}>Reset All Settings &amp; Re-run Setup</button>
           <div className="form-hint" style={{ marginTop: 8 }}>This clears your local configuration. Your license key, private key files, and Telegram tokens on disk are not deleted.</div>
         </div>
       </div>
@@ -529,9 +547,9 @@ export default function Settings() {
             background: 'var(--bg-secondary)', border: '1px solid var(--border)',
             borderRadius: 12, padding: '32px 40px', maxWidth: 400, textAlign: 'center',
           }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 28, marginBottom: 12 }}>&#x26A0;&#xFE0F;</div>
+            <div style={{ fontSize: 32, marginBottom: 16 }}>✓</div>
             <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Settings Saved</h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6, marginBottom: 20 }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6, marginBottom: 24 }}>
               Restart the bot for your changes to take effect.
             </p>
             <button className="btn btn-primary" onClick={() => setShowRestartNotice(false)} style={{ minWidth: 120 }}>
