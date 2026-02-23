@@ -2,6 +2,15 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { readConfig, writeConfig } from '../lib/config';
 
+function Tip({ text }) {
+  return (
+    <span className="tip-wrap">
+      <span className="tip-icon">?</span>
+      <span className="tip-popup">{text}</span>
+    </span>
+  );
+}
+
 export default function Settings() {
   const [tab, setTab] = useState('configure');
   const [config, setConfig] = useState(null);
@@ -223,31 +232,31 @@ export default function Settings() {
           <div className="card">
             <div className="card-title">Signal Parameters</div>
             <div className="form-group">
-              <label className="form-label">Poll interval (ms)</label>
+              <label className="form-label">Poll interval (ms) <Tip text="How often the bot checks for new signals. Lower = faster reaction but more API calls. Default 20000ms (20s)." /></label>
               <input className="form-input" type="number" value={config.signal?.pollMs || 20000} onChange={e => update('signal.pollMs', Number(e.target.value))} />
             </div>
             <div className="grid-2">
               <div className="form-group">
-                <label className="form-label">EMA trend period (1h)</label>
+                <label className="form-label">EMA trend period (1h) <Tip text="EMA period on the 1-hour chart. Determines the trend direction (long vs short). Lower = faster trend flips, higher = smoother." /></label>
                 <input className="form-input" type="number" value={config.signal?.emaTrendPeriod || 50} onChange={e => update('signal.emaTrendPeriod', Number(e.target.value))} />
               </div>
               <div className="form-group">
-                <label className="form-label">EMA trigger period (15m)</label>
+                <label className="form-label">EMA trigger period (15m) <Tip text="EMA period on the 15-min chart. Used for pullback/reclaim entries. Lower = more sensitive, earlier entries." /></label>
                 <input className="form-input" type="number" value={config.signal?.emaTriggerPeriod || 20} onChange={e => update('signal.emaTriggerPeriod', Number(e.target.value))} />
               </div>
             </div>
             <div className="grid-2">
               <div className="form-group">
-                <label className="form-label">ATR period</label>
+                <label className="form-label">ATR period <Tip text="Lookback period for Average True Range on the 15m chart. Used to size stops and filter low-volatility entries." /></label>
                 <input className="form-input" type="number" value={config.signal?.atrPeriod || 14} onChange={e => update('signal.atrPeriod', Number(e.target.value))} />
               </div>
               <div className="form-group">
-                <label className="form-label">ATR multiplier</label>
+                <label className="form-label">ATR multiplier <Tip text="Stop distance = ATR × this multiplier. Higher = wider stops (more room, larger risk per trade). Lower = tighter stops." /></label>
                 <input className="form-input" type="number" step="0.1" value={config.signal?.atrMult || 1.5} onChange={e => update('signal.atrMult', Number(e.target.value))} />
               </div>
             </div>
             <div className="form-group">
-              <label className="form-label">Max stop %</label>
+              <label className="form-label">Max stop % <Tip text="If ATR suggests a stop wider than this, the signal is rejected. Prevents entries in extremely volatile conditions." /></label>
               <input className="form-input" type="number" step="0.1" min="0.1" max="20" value={Math.round((config.signal?.maxStopPct || 0.035) * 1000) / 10} onChange={e => update('signal.maxStopPct', Number(e.target.value) / 100)} />
               <div className="form-hint">Reject signals with stop distance above this (e.g. 3.5 = 3.5%)</div>
             </div>
@@ -257,33 +266,33 @@ export default function Settings() {
             <div className="card-title">Risk Management</div>
             <div className="grid-2">
               <div className="form-group">
-                <label className="form-label">Max leverage</label>
+                <label className="form-label">Max leverage <Tip text="Maximum cross leverage the bot will use on Hyperliquid. Higher leverage = larger positions relative to margin." /></label>
                 <input className="form-input" type="number" value={config.risk?.maxLeverage || 10} onChange={e => update('risk.maxLeverage', Number(e.target.value))} />
               </div>
               <div className="form-group">
-                <label className="form-label">Max daily loss (USD)</label>
+                <label className="form-label">Max daily loss (USD) <Tip text="Bot halts for the day if cumulative losses exceed this amount. Protects against bad streaks." /></label>
                 <input className="form-input" type="number" value={config.risk?.maxDailyLossUsd || 200} onChange={e => update('risk.maxDailyLossUsd', Number(e.target.value))} />
               </div>
             </div>
             <div className="grid-2">
               <div className="form-group">
-                <label className="form-label">Risk per trade %</label>
+                <label className="form-label">Risk per trade % <Tip text="% of your total account equity risked per trade. Used to calculate position size: size = (equity × risk%) / stop distance." /></label>
                 <input className="form-input" type="number" step="0.5" min="0.5" max="100" value={Math.round((config.risk?.riskPerTradePct || 0.03) * 1000) / 10} onChange={e => update('risk.riskPerTradePct', Number(e.target.value) / 100)} />
                 <div className="form-hint">% of equity risked per trade (e.g. 3 = 3%)</div>
               </div>
               <div className="form-group">
-                <label className="form-label">Margin use %</label>
+                <label className="form-label">Margin use % <Tip text="Max fraction of equity used as margin. 100% = use all equity. Lower values leave a buffer for drawdowns." /></label>
                 <input className="form-input" type="number" step="1" min="1" max="100" value={Math.round((config.risk?.marginUsePct || 0.75) * 100)} onChange={e => update('risk.marginUsePct', Number(e.target.value) / 100)} />
                 <div className="form-hint">How much of your equity to use (1–100%)</div>
               </div>
             </div>
             <div className="grid-2">
               <div className="form-group">
-                <label className="form-label">Reentry cooldown (sec)</label>
+                <label className="form-label">Reentry cooldown (sec) <Tip text="Wait time after closing a position before entering a new trade. Prevents rapid re-entries on choppy signals." /></label>
                 <input className="form-input" type="number" value={config.risk?.reentryCooldownSeconds || 300} onChange={e => update('risk.reentryCooldownSeconds', Number(e.target.value))} />
               </div>
               <div className="form-group">
-                <label className="form-label">Loss cooldown (min)</label>
+                <label className="form-label">Loss cooldown (min) <Tip text="Extra cooldown after a losing trade. Prevents revenge trading by forcing a pause before the next entry." /></label>
                 <input className="form-input" type="number" value={config.risk?.lossCooldownMinutes || 15} onChange={e => update('risk.lossCooldownMinutes', Number(e.target.value))} />
               </div>
             </div>
@@ -294,18 +303,18 @@ export default function Settings() {
           <div className="card-title">Take-Profit / Stop-Loss</div>
           <div className="grid-2">
             <div className="form-group">
-              <label className="form-label">Stop-loss cap %</label>
+              <label className="form-label">Stop-loss cap % <Tip text="Hard cap on how far the stop can be from entry as a % of price. Acts as a maximum stop distance regardless of ATR." /></label>
               <input className="form-input" type="number" step="0.5" min="0.5" max="50" value={Math.round((config.exits?.stopLossPct || 0.10) * 1000) / 10} onChange={e => update('exits.stopLossPct', Number(e.target.value) / 100)} />
               <div className="form-hint">Max stop distance from entry (e.g. 10 = 10%)</div>
             </div>
             <div className="form-group">
-              <label className="form-label">Max margin loss %</label>
+              <label className="form-label">Max margin loss % <Tip text="Max loss as a % of margin used (not account equity). Caps stop width relative to leverage. E.g. 3% with 10x leverage = stop at most 0.3% from entry." /></label>
               <input className="form-input" type="number" step="0.5" min="0.5" max="100" value={Math.round((config.exits?.maxMarginLossPct || 0.03) * 1000) / 10} onChange={e => update('exits.maxMarginLossPct', Number(e.target.value) / 100)} />
               <div className="form-hint">Max loss as % of margin used (e.g. 3 = 3%)</div>
             </div>
           </div>
           <div className="form-group">
-            <label className="form-label">Take-Profit Levels</label>
+            <label className="form-label">Take-Profit Levels <Tip text="Define up to 2 TP targets. Each closes a % of your position at a set distance from entry. The remainder is the runner." /></label>
             {(config.exits?.tp || []).map((tp, i) => (
               <div key={i} className="grid-2" style={{ marginBottom: 8 }}>
                 <div className="form-group" style={{ marginBottom: 0 }}>
@@ -381,7 +390,7 @@ export default function Settings() {
             </div>
             <div className="grid-2">
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label" style={{ fontSize: 11 }}>Trail distance (%)</label>
+                <label className="form-label" style={{ fontSize: 11 }}>Trail distance (%) <Tip text="How far behind price the trailing stop sits. 0.5% = tight (captures profit quickly, may stop on bounces). 1%+ = loose (more room to run)." /></label>
                 <input
                   className="form-input"
                   type="number"
@@ -397,7 +406,7 @@ export default function Settings() {
                 <div className="form-hint">0.5% = tight, 1% = loose</div>
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label" style={{ fontSize: 11 }}>Min update interval (sec)</label>
+                <label className="form-label" style={{ fontSize: 11 }}>Min update interval (sec) <Tip text="Minimum seconds between trailing stop updates. Prevents excessive API calls to Hyperliquid." /></label>
                 <input
                   className="form-input"
                   type="number"
