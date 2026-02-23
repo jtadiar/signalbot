@@ -17,15 +17,20 @@ export default function TradeLog() {
       const closeEntries = raw.filter(t => t.action === 'CLOSE');
       const openEntries = raw.filter(t => t.action === 'OPEN');
 
-      // Deduplicate CLOSE events: group by side + rounded entryPx, keep first occurrence only
-      const closeSeen = new Set();
-      const uniqueCloses = [];
+      // Group CLOSE events by position (side + entryPx): a position can have multiple partial closes (TP1, TP2, runner)
+      const closeGroups = {};
       for (const c of closeEntries) {
         const key = `${c.side}:${Math.round(Number(c.entryPx))}`;
-        if (closeSeen.has(key)) continue;
-        closeSeen.add(key);
-        uniqueCloses.push(c);
+        if (!closeGroups[key]) {
+          closeGroups[key] = { side: c.side, entryPx: c.entryPx, sizeBtc: 0, exitPx: c.exitPx, pnlUsd: 0, ts: c.ts };
+        }
+        const g = closeGroups[key];
+        g.sizeBtc = (Number(g.sizeBtc) || 0) + (Number(c.sizeBtc) || 0);
+        g.pnlUsd = (Number(g.pnlUsd) || 0) + (Number(c.pnlUsd) || 0);
+        g.exitPx = c.exitPx; // use last close price
+        if (c.ts && (!g.ts || new Date(c.ts) > new Date(g.ts))) g.ts = c.ts;
       }
+      const uniqueCloses = Object.values(closeGroups);
 
       // Only the MOST RECENT open (by timestamp) with no matching close can be "Live".
       // Any older open without a close was closed externally before the fix was in place.

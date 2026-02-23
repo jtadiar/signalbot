@@ -121,11 +121,15 @@ async function pingNewFills(){
     const perps = (fills||[]).filter(f => String(f.coin).includes(`${cfg.market.coin}-PERP`) || String(f.coin).includes(cfg.market.coin));
     if (!perps.length) return;
 
-    // process oldest->newest, skip duplicates at same timestamp by using > cursor
     const sorted = perps.slice().sort((a,b)=>Number(a.time)-Number(b.time));
+    let maxTimeMs = state.lastFillTimeMs || 0;
+
+    // Group close fills: HL returns multiple sub-fills per order (same oid). Aggregate before pinging.
+    const closeGroups = [];
     for (const f of sorted){
       const t = Number(f.time||0);
       if (t && t <= (state.lastFillTimeMs||0)) continue;
+      if (t > maxTimeMs) maxTimeMs = t;
 
       const dir = String(f.dir||'');
       const isClose = dir.toLowerCase().includes('close');
@@ -134,30 +138,44 @@ async function pingNewFills(){
       const sz = Number(f.sz||0);
       const closedPnl = f.closedPnl !== undefined ? Number(f.closedPnl) : null;
       const fee = f.fee !== undefined ? Number(f.fee) : null;
+      const oid = (f.oid != null ? String(f.oid) : null) || (f.orderId != null ? String(f.orderId) : null) || `t${Math.floor(t/5000)}_${dir}`;
 
       if (isClose){
-        const net = (closedPnl !== null && fee !== null) ? (closedPnl - fee) : null;
-        const isLoss = (net !== null) ? (net < 0) : (closedPnl !== null ? closedPnl < 0 : false);
-
-        if (isLoss) {
-          state.lastLossAtMs = t || Date.now();
-          persistState();
+        const gkey = `${oid}_${dir}`;
+        let g = closeGroups.find(x => x.key === gkey);
+        if (!g){
+          g = { key: gkey, dir, sz: 0, closedPnl: 0, fee: 0, px, time: t, count: 0 };
+          closeGroups.push(g);
         }
-
-        const tag = isLoss ? 'STOP/LOSS' : 'TP/CLOSE';
-        const msg = [
-          `HL SIGNALBOT ${tag}`,
-          `${dir.toUpperCase()}`,
-          `${sz.toFixed(5)} @ ${roundPx(cfg.market.coin, px)}`,
-          (net !== null) ? `Net ${net.toFixed(2)} USDC` : null,
-          `(${fmtTime(t)})`,
-        ].filter(Boolean).join(' | ');
-        await tgSend(msg);
-      } else if (isOpen){
-        // We already ping on OPEN at entry; avoid duplicate pings here.
+        g.sz += sz;
+        if (closedPnl !== null && !Number.isNaN(closedPnl)) g.closedPnl += closedPnl;
+        if (fee !== null && !Number.isNaN(fee)) g.fee += fee;
+        g.px = px; // use last fill price for display
+        g.time = t;
+        g.count += 1;
       }
+    }
 
-      if (t) state.lastFillTimeMs = t;
+    for (const g of closeGroups){
+      const net = (g.closedPnl !== null && g.fee !== null) ? (g.closedPnl - g.fee) : null;
+      const isLoss = (net !== null) ? (net < 0) : (g.closedPnl < 0);
+      if (isLoss){
+        state.lastLossAtMs = g.time || Date.now();
+        persistState();
+      }
+      const tag = isLoss ? 'STOP/LOSS' : 'TP/CLOSE';
+      const msg = [
+        `HL SIGNALBOT ${tag}`,
+        g.dir.toUpperCase(),
+        `${g.sz.toFixed(5)} @ ${roundPx(cfg.market.coin, g.px)}`,
+        (net !== null) ? `Net ${net.toFixed(2)} USDC` : null,
+        `(${fmtTime(g.time)})`,
+      ].filter(Boolean).join(' | ');
+      await tgSend(msg);
+    }
+
+    if (maxTimeMs > (state.lastFillTimeMs||0)){
+      state.lastFillTimeMs = maxTimeMs;
       persistState();
     }
   } catch {}

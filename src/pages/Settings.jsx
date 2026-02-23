@@ -339,6 +339,73 @@ export default function Settings() {
               <span>Trail stop to breakeven after TP1</span>
             </label>
           </div>
+          <div className="form-group">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input type="checkbox" checked={config.exits?.trailStopToTp1OnTp2 ?? true} onChange={e => update('exits.trailStopToTp1OnTp2', e.target.checked)} />
+              <span>Trail stop to TP1 price after TP2</span>
+            </label>
+            <div className="form-hint">After TP2 fills, move SL up to the TP1 price (protects more profit)</div>
+          </div>
+
+          <div className="form-group" style={{ marginTop: 16 }}>
+            <label className="form-label">Trailing stop (runner after TP2)</label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 8 }}>
+              <input
+                type="checkbox"
+                checked={String(config.exits?.trailingAfterTp2?.enabled ?? true).toLowerCase() !== 'false'}
+                onChange={e => {
+                  const tr = config.exits?.trailingAfterTp2 || {};
+                  update('exits.trailingAfterTp2', { kind: tr.kind || 'pct', trailPct: tr.trailPct ?? 0.005, minUpdateSeconds: tr.minUpdateSeconds ?? 20, enabled: e.target.checked });
+                }}
+              />
+              <span>Enable trailing stop on runner</span>
+            </label>
+            <div className="grid-2">
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontSize: 11 }}>Trail distance (%)</label>
+                <input
+                  className="form-input"
+                  type="number"
+                  step="0.05"
+                  min="0.1"
+                  max="5"
+                  value={Math.round((config.exits?.trailingAfterTp2?.trailPct ?? 0.005) * 10000) / 100}
+                  onChange={e => {
+                    const tr = config.exits?.trailingAfterTp2 || {};
+                    update('exits.trailingAfterTp2', { kind: tr.kind || 'pct', enabled: String(tr.enabled ?? true).toLowerCase() !== 'false', trailPct: Number(e.target.value) / 100, minUpdateSeconds: tr.minUpdateSeconds ?? 20 });
+                  }}
+                />
+                <div className="form-hint">0.5% = tight, 1% = loose</div>
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontSize: 11 }}>Min update interval (sec)</label>
+                <input
+                  className="form-input"
+                  type="number"
+                  min="5"
+                  max="120"
+                  value={config.exits?.trailingAfterTp2?.minUpdateSeconds ?? 20}
+                  onChange={e => {
+                    const tr = config.exits?.trailingAfterTp2 || {};
+                    update('exits.trailingAfterTp2', { kind: tr.kind || 'pct', enabled: String(tr.enabled ?? true).toLowerCase() !== 'false', trailPct: tr.trailPct ?? 0.005, minUpdateSeconds: Number(e.target.value) });
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Runner exit</label>
+            <select
+              className="form-input"
+              value={config.exits?.runnerExit || 'signal'}
+              onChange={e => update('exits.runnerExit', e.target.value)}
+              style={{ maxWidth: 280 }}
+            >
+              <option value="signal">Exit on signal reversal</option>
+            </select>
+            <div className="form-hint">How the remaining 50% exits after TP1/TP2 — signal = close when trend flips</div>
+          </div>
         </div>
 
         <div className="card">
