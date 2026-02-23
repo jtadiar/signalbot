@@ -1,5 +1,22 @@
 import { useState, useEffect } from 'react';
-import { readTradeLog } from '../lib/config';
+import { readTradeLog, readConfig } from '../lib/config';
+
+async function fetchUserFills(wallet, coin, startMs, endMs) {
+  try {
+    const res = await fetch('https://api.hyperliquid.xyz/info', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'userFillsByTime', user: wallet, startTime: startMs, endTime: endMs }),
+    });
+    const fills = await res.json();
+    const perp = (fills || []).filter(f =>
+      String(f.coin || '').includes(`${coin}-PERP`) || String(f.coin || '').includes(coin)
+    );
+    return perp;
+  } catch {
+    return [];
+  }
+}
 
 export default function TradeLog() {
   const [trades, setTrades] = useState([]);
@@ -13,7 +30,9 @@ export default function TradeLog() {
 
   async function loadTrades() {
     try {
-      const raw = await readTradeLog();
+      const [raw, cfg] = await Promise.all([readTradeLog(), readConfig()]);
+      const wallet = cfg?.wallet?.address;
+      const coin = cfg?.market?.coin || 'BTC';
       const closeEntries = raw.filter(t => t.action === 'CLOSE');
       const openEntries = raw.filter(t => t.action === 'OPEN');
 
@@ -27,13 +46,68 @@ export default function TradeLog() {
         const g = closeGroups[key];
         g.sizeBtc = (Number(g.sizeBtc) || 0) + (Number(c.sizeBtc) || 0);
         g.pnlUsd = (Number(g.pnlUsd) || 0) + (Number(c.pnlUsd) || 0);
-        g.exitPx = c.exitPx; // use last close price
+        g.exitPx = c.exitPx;
         if (c.ts && (!g.ts || new Date(c.ts) > new Date(g.ts))) g.ts = c.ts;
       }
-      const uniqueCloses = Object.values(closeGroups);
+      let uniqueCloses = Object.values(closeGroups);
+
+      // Enrich with HL fill history for past trades (native TP triggers don't write TP1/TP2 to trades.jsonl)
+      if (wallet && openEntries.length > 0) {
+        const oldestTs = Math.min(...openEntries.map(o => new Date(o.ts || 0).getTime()));
+        const startMs = Math.max(0, oldestTs - 24 * 60 * 60 * 1000);
+        const endMs = Date.now() + 60000;
+        const fills = await fetchUserFills(wallet, coin, startMs, endMs);
+        const closeFills = (fills || []).filter(f => String(f.dir || '').toLowerCase().includes('close'));
+        const opensChronological = [...openEntries].sort((a, b) => new Date(a.ts) - new Date(b.ts));
+
+        for (let i = 0; i < opensChronological.length; i++) {
+          const o = opensChronological[i];
+          const oTime = new Date(o.ts || 0).getTime();
+          const nextOTime = i + 1 < opensChronological.length
+            ? new Date(opensChronological[i + 1].ts || 0).getTime()
+            : endMs;
+          const side = (o.side || '').toLowerCase();
+          const posCloses = closeFills.filter(f => {
+            const t = Number(f.time || 0);
+            if (t <= oTime || t > nextOTime) return false;
+            const d = String(f.dir || '').toLowerCase();
+            return (side === 'short' && d.includes('short')) || (side === 'long' && d.includes('long'));
+          });
+
+          if (posCloses.length > 0) {
+            const totalPnl = posCloses.reduce((s, f) => {
+              const cp = f.closedPnl != null ? Number(f.closedPnl) : 0;
+              const fee = f.fee != null ? Number(f.fee) : 0;
+              return s + (cp - fee);
+            }, 0);
+            const totalSz = posCloses.reduce((s, f) => s + Number(f.sz || 0), 0);
+            const lastFill = posCloses.sort((a, b) => Number(b.time) - Number(a.time))[0];
+            const exitPx = Number(lastFill?.px || 0);
+            const closeTs = lastFill ? new Date(Number(lastFill.time)).toISOString() : null;
+
+            const key = `${o.side}:${Math.round(Number(o.entryPx))}`;
+            const existing = closeGroups[key];
+            if (existing) {
+              existing.pnlUsd = totalPnl;
+              existing.sizeBtc = totalSz;
+              if (exitPx > 0) existing.exitPx = exitPx;
+              if (closeTs) existing.ts = closeTs;
+            } else {
+              closeGroups[key] = {
+                side: o.side,
+                entryPx: o.entryPx,
+                sizeBtc: totalSz,
+                exitPx: exitPx || null,
+                pnlUsd: totalPnl,
+                ts: closeTs,
+              };
+            }
+          }
+        }
+        uniqueCloses = Object.values(closeGroups);
+      }
 
       // Only the MOST RECENT open (by timestamp) with no matching close can be "Live".
-      // Any older open without a close was closed externally before the fix was in place.
       const sortedOpens = [...openEntries].sort((a, b) => new Date(b.ts) - new Date(a.ts));
       const liveOpens = [];
       if (sortedOpens.length > 0) {
@@ -44,7 +118,6 @@ export default function TradeLog() {
         if (!hasClose) liveOpens.push(newest);
       }
 
-      // Build final list: live opens + closed trades, sorted newest first
       const all = [
         ...liveOpens.map(o => ({ ...o, isLive: true })),
         ...uniqueCloses.map(c => ({ ...c, isLive: false })),
