@@ -57,8 +57,29 @@ try {
   const szi = pos ? Number(pos.szi || 0) : 0;
   const entryPx = pos ? Number(pos.entryPx || 0) : 0;
 
+  function clearBotState() {
+    try {
+      const statePath = path.join(DATA_DIR, 'state.json');
+      const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+      state.activeSide = null;
+      state.entryPx = null;
+      state.entryNotionalUsd = null;
+      state.initialSz = null;
+      state.marginUsd = null;
+      state.stopPct = null;
+      state.stopPx = null;
+      state.tp1Done = false;
+      state.tp2Done = false;
+      state.exitsPlacedForPosKey = null;
+      state.lastExitAtMs = Date.now();
+      fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
+    } catch {}
+  }
+
   if (Math.abs(szi) === 0) {
-    console.log(JSON.stringify({ ok: true, message: 'No open position', closed: false, szi: 0 }));
+    // Position already flat on Hyperliquid — still clear local state so the UI doesn't show a ghost position.
+    clearBotState();
+    console.log(JSON.stringify({ ok: true, message: 'No open position', closed: false, szi: 0, stateCleared: true }));
     process.exit(0);
   }
 
