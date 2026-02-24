@@ -263,6 +263,11 @@ const state = {
 
 const loaded = loadState();
 if (loaded && typeof loaded === 'object') Object.assign(state, loaded);
+// Back-compat: if we previously persisted only `halted: true`, attach today's UTC day key
+// so the auto-reset-at-midnight logic works immediately.
+if (state.halted && !state.haltDayUtc) {
+  try { state.haltDayUtc = utcDayKey(state.lastActionAt || Date.now()); } catch {}
+}
 
 function roundSz(coin, sz){
   return Number(Number(sz).toFixed(5));
@@ -1130,6 +1135,7 @@ function utcDayKey(ms = Date.now()){
 
 async function mainLoop(){
   // If we halted due to maxDailyLossUsd, auto-reset at UTC midnight.
+  // While halted, still emit equity + daily pnl so the dashboard doesn't go blank.
   if (state.halted) {
     const today = utcDayKey();
     const haltedDay = state.haltDayUtc || today;
@@ -1140,6 +1146,14 @@ async function mainLoop(){
       tauriEmit({ type: 'log', message: 'New day (UTC) — clearing daily-loss halt. Bot resumed.' });
       persistState();
     } else {
+      // Still refresh stats while halted
+      try {
+        const { pnl: dp, fees: dailyFees } = await dailyPnl();
+        tauriEmit({ type: 'pnl', value: dp, fees: dailyFees });
+        await getBtcPosition(); // emits equity + position snapshot
+        state.lastActionAt = Date.now();
+        persistState();
+      } catch {}
       return;
     }
   }
