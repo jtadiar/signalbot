@@ -29,6 +29,7 @@ function readSecret(p) {
 }
 
 const configPath = process.argv[2] || path.join(DATA_DIR, 'config.json');
+const checkOnly = process.argv[3] === '--check-only';
 const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 const TRADE_LOG = process.env.TRADE_LOG || path.join(DATA_DIR, 'trades.jsonl');
 
@@ -57,7 +58,15 @@ try {
   const entryPx = pos ? Number(pos.entryPx || 0) : 0;
 
   if (Math.abs(szi) === 0) {
-    console.log(JSON.stringify({ ok: true, message: 'No open position', closed: false }));
+    console.log(JSON.stringify({ ok: true, message: 'No open position', closed: false, szi: 0 }));
+    process.exit(0);
+  }
+
+  if (checkOnly) {
+    const side = szi > 0 ? 'long' : 'short';
+    const unrealizedPnl = pos ? Number(pos.unrealizedPnl || 0) : 0;
+    const marginUsed = pos ? Number(pos.marginUsed || 0) : 0;
+    console.log(JSON.stringify({ ok: true, closed: false, checkOnly: true, szi, entryPx, side, unrealizedPnl, marginUsed }));
     process.exit(0);
   }
 

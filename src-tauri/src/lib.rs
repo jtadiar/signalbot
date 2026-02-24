@@ -514,11 +514,10 @@ fn stop_bot(state: State<BotState>) -> Result<(), String> {
     }
 }
 
-#[tauri::command]
-async fn close_position(app: tauri::AppHandle) -> Result<String, String> {
+fn run_close_script(app: &tauri::AppHandle, check_only: bool) -> Result<String, String> {
     let node = find_node()?;
-    let bot_dir = find_bot_dir(&app)?;
-    let config_dir = bot_config_dir(&app)?;
+    let bot_dir = find_bot_dir(app)?;
+    let config_dir = bot_config_dir(app)?;
     let close_script = bot_dir.join("close.mjs");
     if !close_script.exists() {
         return Err("close.mjs not found in bot directory".into());
@@ -532,16 +531,17 @@ async fn close_position(app: tauri::AppHandle) -> Result<String, String> {
         .current_dir(&bot_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    if check_only {
+        cmd.arg("--check-only");
+    }
     if env_path.exists() {
         cmd.env("DOTENV_CONFIG_PATH", env_path.to_str().unwrap());
     }
-
     cmd.env("DOTENV_CONFIG_QUIET", "true");
     cmd.env("DATA_DIR", config_dir.to_str().unwrap());
 
-    let output = cmd.output().map_err(|e| format!("Failed to run close script: {}", e))?;
+    let output = cmd.output().map_err(|e| format!("Failed to run script: {}", e))?;
     let raw_stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    // Extract the last JSON line — dotenv may print noise before our JSON output
     let stdout = raw_stdout
         .lines()
         .rev()
@@ -550,9 +550,19 @@ async fn close_position(app: tauri::AppHandle) -> Result<String, String> {
         .to_string();
     if stdout.is_empty() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(format!("Close script failed: {}", stderr));
+        return Err(format!("Script failed: {}", stderr));
     }
     Ok(stdout)
+}
+
+#[tauri::command]
+async fn check_position(app: tauri::AppHandle) -> Result<String, String> {
+    run_close_script(&app, true)
+}
+
+#[tauri::command]
+async fn close_position(app: tauri::AppHandle) -> Result<String, String> {
+    run_close_script(&app, false)
 }
 
 #[tauri::command]
@@ -591,6 +601,7 @@ pub fn run() {
             stop_bot,
             restart_bot,
             close_position,
+            check_position,
             get_bot_dir,
             get_config_dir,
             get_health,

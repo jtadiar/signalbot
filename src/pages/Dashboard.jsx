@@ -17,6 +17,7 @@ export default function Dashboard() {
   const [closeResult, setCloseResult] = useState(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const [equity, setEquity] = useState(null);
+  const [syncing, setSyncing] = useState(false);
 
   // Sync with actual bot state on mount
   useEffect(() => {
@@ -112,6 +113,35 @@ export default function Dashboard() {
     setStarting(false);
   }, []);
 
+  const handleSync = useCallback(async () => {
+    setSyncing(true);
+    setLastError(null);
+    setCloseResult(null);
+    try {
+      const raw = await invoke('check_position');
+      const result = JSON.parse(raw);
+      if (result.ok && result.checkOnly && Math.abs(result.szi || 0) > 0) {
+        setPosition({
+          side: result.side || (result.szi > 0 ? 'long' : 'short'),
+          size: Math.abs(result.szi || 0),
+          entryPx: result.entryPx,
+          unrealizedPnl: result.unrealizedPnl ?? 0,
+          marginUsed: result.marginUsed ?? 0,
+          orders: [],
+        });
+      } else if (result.ok && !result.checkOnly && (result.szi === 0 || result.closed === false)) {
+        setPosition(null);
+      } else if (result.ok) {
+        setPosition(null);
+      } else {
+        setLastError(result.error || 'Sync failed');
+      }
+    } catch (e) {
+      setLastError(typeof e === 'string' ? e : e?.message || 'Sync failed');
+    }
+    setSyncing(false);
+  }, []);
+
   const handleCloseTrade = useCallback(async () => {
     setClosing(true);
     setCloseResult(null);
@@ -130,6 +160,7 @@ export default function Dashboard() {
         setPosition(null);
       } else if (result.ok && !result.closed) {
         setCloseResult({ noPosition: true });
+        setPosition(null);
       } else {
         setLastError(result.error || 'Close failed');
       }
@@ -202,7 +233,15 @@ export default function Dashboard() {
         </div>
       )}
 
-      {closeResult && !closeResult.noPosition && (
+      {closeResult && closeResult.noPosition && (
+        <div className="card" style={{ borderColor: 'var(--text-muted)', background: 'var(--bg-secondary)', marginBottom: 16 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-secondary)' }}>
+            No open position — display cleared
+          </div>
+          <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>Position was already closed on Hyperliquid. The display has been refreshed.</div>
+        </div>
+      )}
+      {closeResult && !closeResult.noPosition && closeResult.pnl !== undefined && (
         <div className="card" style={{ borderColor: closeResult.won ? 'var(--green)' : 'var(--red)', background: closeResult.won ? 'var(--green-bg)' : 'var(--red-bg)', marginBottom: 16 }}>
           <div style={{ fontWeight: 600, fontSize: 14, color: closeResult.won ? 'var(--green)' : 'var(--red)' }}>
             Trade Closed — {closeResult.won ? 'WIN' : 'LOSS'}: {closeResult.pnl >= 0 ? '+' : ''}${closeResult.pnl?.toFixed(2)} @ ${closeResult.exitPx?.toLocaleString()}
@@ -211,14 +250,34 @@ export default function Dashboard() {
       )}
 
       {confirmClose && (
-        <div className="card" style={{ borderColor: 'var(--yellow)', background: 'rgba(255, 193, 7, 0.08)', marginBottom: 16 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>Close this trade at market price?</div>
-          <div className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>This will immediately market-close your position and cancel all TP/SL orders.</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-danger" onClick={handleCloseTrade} disabled={closing}>
-              {closing ? 'Closing...' : 'Yes, Close Trade'}
-            </button>
-            <button className="btn btn-outline" onClick={() => setConfirmClose(false)} disabled={closing}>Cancel</button>
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(0,0,0,0.6)',
+          }}
+          onClick={() => !closing && setConfirmClose(false)}
+        >
+          <div
+            className="card"
+            style={{ maxWidth: 380, borderColor: 'var(--yellow)', background: 'var(--bg-secondary)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 8 }}>Close this trade?</div>
+            <div className="text-muted" style={{ fontSize: 13, marginBottom: 16 }}>This will market-close your position and cancel TP/SL orders. If the position is already closed, the display will be refreshed.</div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCloseTrade(); }}
+                disabled={closing}
+                style={{ flex: 1 }}
+              >
+                {closing ? 'Closing...' : 'Yes, Close Trade'}
+              </button>
+              <button type="button" className="btn btn-outline" onClick={() => setConfirmClose(false)} disabled={closing}>
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -259,16 +318,27 @@ export default function Dashboard() {
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <div className="card-title" style={{ marginBottom: 0 }}>Current Position</div>
-            {hasPosition && !confirmClose && (
+            <div style={{ display: 'flex', gap: 8 }}>
               <button
-                className="btn btn-danger"
+                className="btn btn-outline"
                 style={{ padding: '4px 12px', fontSize: 12 }}
-                onClick={() => { setCloseResult(null); setConfirmClose(true); }}
-                disabled={closing}
+                onClick={handleSync}
+                disabled={syncing || closing}
+                title="Refresh position from Hyperliquid"
               >
-                Close Trade
+                {syncing ? 'Syncing...' : 'Sync'}
               </button>
-            )}
+              {hasPosition && !confirmClose && (
+                <button
+                  className="btn btn-danger"
+                  style={{ padding: '4px 12px', fontSize: 12 }}
+                  onClick={() => { setCloseResult(null); setConfirmClose(true); }}
+                  disabled={closing}
+                >
+                  Close Trade
+                </button>
+              )}
+            </div>
           </div>
           {hasPosition ? (
             <>
