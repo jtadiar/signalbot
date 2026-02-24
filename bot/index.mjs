@@ -201,6 +201,7 @@ function persistState(){
       STATE_PATH,
       JSON.stringify({
         halted: state.halted,
+        haltDayUtc: state.haltDayUtc,
         lastActionAt: state.lastActionAt,
         backoffUntilMs: state.backoffUntilMs,
         errStreak: state.errStreak,
@@ -229,6 +230,7 @@ function nowIso(){ return new Date().toISOString(); }
 const state = {
   startedAt: Date.now(),
   halted: false,
+  haltDayUtc: null,
   lastActionAt: 0,
   backoffUntilMs: 0,
   errStreak: 0,
@@ -1118,8 +1120,29 @@ async function tryEnter(){
   state.lastActionAt = Date.now();
 }
 
+function utcDayKey(ms = Date.now()){
+  const d = new Date(ms);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth()+1).padStart(2,'0');
+  const day = String(d.getUTCDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
 async function mainLoop(){
-  if (state.halted) return;
+  // If we halted due to maxDailyLossUsd, auto-reset at UTC midnight.
+  if (state.halted) {
+    const today = utcDayKey();
+    const haltedDay = state.haltDayUtc || today;
+    if (today !== haltedDay) {
+      state.halted = false;
+      state.haltDayUtc = null;
+      console.log(nowIso(), 'AUTO-RESET: new UTC day detected; clearing halted state');
+      tauriEmit({ type: 'log', message: 'New day (UTC) — clearing daily-loss halt. Bot resumed.' });
+      persistState();
+    } else {
+      return;
+    }
+  }
   const now = Date.now();
   if (now < state.backoffUntilMs) return;
   if ((now - state.lastActionAt) < (cfg.risk.cooldownSeconds*1000)) return;
@@ -1129,6 +1152,7 @@ async function mainLoop(){
   tauriEmit({ type: 'pnl', value: dp, fees: dailyFees });
   if (dp < -Math.abs(cfg.risk.maxDailyLossUsd)){
     state.halted = true;
+    state.haltDayUtc = utcDayKey();
     console.log(nowIso(), 'HALT: daily pnl', dp, 'below', -Math.abs(cfg.risk.maxDailyLossUsd));
     tauriEmit({ type: 'halt', reason: `daily pnl ${dp.toFixed(2)} below limit` });
     await cancelAllBtcOrders().catch(()=>{});
