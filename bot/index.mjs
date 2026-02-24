@@ -655,24 +655,22 @@ async function manageOpenPosition(pos){
     }
 
     if (wantCount > 0 && okCount === wantCount){
-      // Verify they actually show up in frontend open orders (best-effort) before marking as placed.
+      // All placement calls succeeded — trust them. The HL API can be slow to
+      // reflect orders in getFrontendOpenOrders, so a failed verify doesn't mean
+      // the orders weren't placed. Mark as placed to avoid re-placement spam.
+      state.exitsPlacedForPosKey = posKey;
+      persistState();
+
+      // Best-effort verify (log only, never returns ok:false when all calls succeeded)
       try {
         const oo = await sdk.info.getFrontendOpenOrders(cfg.wallet.address, true);
         const coinPerp = `${cfg.market.coin}-PERP`;
         const active = (oo||[]).filter(o => (o.coin===cfg.market.coin || o.coin===coinPerp) && o.reduceOnly===true && (String(o.orderType||'').toLowerCase().includes('stop') || String(o.orderType||'').toLowerCase().includes('take profit')));
-        if (active.length >= wantCount) {
-          state.exitsPlacedForPosKey = posKey;
-          persistState();
-          return { ok: true, posKey, wantCount, okCount, hasExistingStop, hasExistingTp };
+        if (active.length < wantCount) {
+          console.warn(nowIso(), `TP/SL verify: expected ${wantCount}, found ${active.length} — API may be lagging, orders were accepted`);
         }
-        console.error(nowIso(), 'TP/SL placement verify failed', { wantCount, found: active.length });
-        return { ok: false, posKey, wantCount, okCount, hasExistingStop, hasExistingTp, errors: [{ kind: 'verify', msg: `found ${active.length}` }] };
-      } catch {
-        // If verify fails, still mark as placed to avoid spamming, since calls succeeded.
-        state.exitsPlacedForPosKey = posKey;
-        persistState();
-        return { ok: true, posKey, wantCount, okCount, hasExistingStop, hasExistingTp, verified: false };
-      }
+      } catch {}
+      return { ok: true, posKey, wantCount, okCount, hasExistingStop, hasExistingTp };
     }
 
     // Don't mark as placed; we want to retry next loop.
@@ -1089,36 +1087,46 @@ async function tryEnter(){
   state.exitsPlacedForPosKey = null;
   persistState();
 
-  // Place native TP/SL immediately after entry and ENFORCE protection.
-  // If we cannot get TP/SL placed within a few seconds, we close the position to avoid naked exposure.
+  // Place native TP/SL immediately after entry.
+  // Retry up to 3 times with increasing delays. Only close the position if
+  // placement calls themselves failed (not just a slow verify — the verify
+  // step is best-effort and no longer gates this).
   try {
-    await manageOpenPosition({ szi: sig.side==='long' ? totalSz : -totalSz, entryPx: avgPx });
-
-    const st = state.lastTpslStatus;
-    const ok = st && st.ok;
-    if (!ok){
-      // One quick retry after a short delay (covers transient API hiccups)
-      await new Promise(r=>setTimeout(r, 1500));
-      await manageOpenPosition({ szi: sig.side==='long' ? totalSz : -totalSz, entryPx: avgPx });
+    const posArgs = { szi: sig.side==='long' ? totalSz : -totalSz, entryPx: avgPx };
+    let placed = false;
+    for (let attempt = 0; attempt < 3; attempt++){
+      await manageOpenPosition(posArgs);
+      const st = state.lastTpslStatus;
+      if (st && st.ok){ placed = true; break; }
+      if (st && st.okCount > 0){
+        // Some orders placed — likely just a partial failure, don't close
+        console.warn(nowIso(), `TP/SL attempt ${attempt+1}: partial (${st.okCount}/${st.wantCount}), retrying...`);
+      } else {
+        console.warn(nowIso(), `TP/SL attempt ${attempt+1} failed, retrying...`, st);
+      }
+      await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
     }
 
-    const st2 = state.lastTpslStatus;
-    const ok2 = st2 && st2.ok;
-    if (!ok2){
-      console.error(nowIso(), 'FATAL: TP/SL not placed after entry; closing to avoid exposure', st2);
-      try { await sdk.custom.marketClose(`${cfg.market.coin}-PERP`); } catch {}
-      state.lastExitAtMs = Date.now();
-      state.activeSide = null;
-      state.entryPx = null;
-      state.entryNotionalUsd = null;
-      state.initialSz = null;
-      state.marginUsd = null;
-      state.stopPct = null;
-      state.stopPx = null;
-      state.tp1Done = false;
-      state.tp2Done = false;
-      state.exitsPlacedForPosKey = null;
-      persistState();
+    if (!placed){
+      const st = state.lastTpslStatus;
+      if (st && st.okCount === 0 && st.wantCount > 0){
+        console.error(nowIso(), 'FATAL: No TP/SL orders placed after 3 attempts; closing to avoid exposure', st);
+        try { await sdk.custom.marketClose(`${cfg.market.coin}-PERP`); } catch {}
+        state.lastExitAtMs = Date.now();
+        state.activeSide = null;
+        state.entryPx = null;
+        state.entryNotionalUsd = null;
+        state.initialSz = null;
+        state.marginUsd = null;
+        state.stopPct = null;
+        state.stopPx = null;
+        state.tp1Done = false;
+        state.tp2Done = false;
+        state.exitsPlacedForPosKey = null;
+        persistState();
+      } else {
+        console.warn(nowIso(), 'TP/SL partially placed — keeping position, will retry on next cycle', st);
+      }
     }
   } catch {}
 
