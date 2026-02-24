@@ -39,13 +39,19 @@ fn find_bot_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
 
     // 2. Production: use a writable runtime directory with deps installed
     let runtime_dir = user_data_dir()?.join("bot");
-    if runtime_dir.join("index.mjs").exists() && runtime_dir.join("node_modules").exists() {
-        return Ok(runtime_dir);
-    }
+    let has_runtime = runtime_dir.join("index.mjs").exists() && runtime_dir.join("node_modules").exists();
 
-    // 3. Copy bundled bot files to the writable runtime dir and install deps
-    let resource_bot = find_resource_bot_dir(app)?;
-    provision_bot_runtime(&resource_bot, &runtime_dir)?;
+    // Always re-copy .mjs files from the bundle so app updates propagate.
+    // Only run full npm install if node_modules is missing.
+    if let Ok(resource_bot) = find_resource_bot_dir(app) {
+        if has_runtime {
+            sync_bot_scripts(&resource_bot, &runtime_dir);
+        } else {
+            provision_bot_runtime(&resource_bot, &runtime_dir)?;
+        }
+    } else if !has_runtime {
+        return Err("Cannot locate bundled bot files. Reinstall the app.".into());
+    }
 
     Ok(runtime_dir)
 }
@@ -68,6 +74,18 @@ fn find_resource_bot_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, S
         }
     }
     Err("Cannot locate bundled bot files. Reinstall the app.".into())
+}
+
+fn sync_bot_scripts(source: &std::path::Path, target: &std::path::Path) {
+    if let Ok(entries) = std::fs::read_dir(source) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.ends_with(".mjs") || name.ends_with(".json") {
+                let dest = target.join(&name);
+                let _ = std::fs::copy(entry.path(), &dest);
+            }
+        }
+    }
 }
 
 fn provision_bot_runtime(
