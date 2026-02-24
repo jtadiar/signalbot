@@ -17,7 +17,10 @@
     "emaTriggerPeriod": 20,
     "atrPeriod": 14,
     "atrMult": 1.5,
-    "maxStopPct": 0.035
+    "maxStopPct": 0.035,
+    "maxEmaDistPct": 0.02,
+    "stochFilter": { "enabled": true, "overbought": 80, "oversold": 20 },
+    "confirmCandles": 1
   },
   "risk": {
     "maxLeverage": 10,

@@ -54,7 +54,10 @@ These control when the bot enters trades.
   "emaTriggerPeriod": 20,
   "atrPeriod": 14,
   "atrMult": 1.5,
-  "maxStopPct": 0.035
+  "maxStopPct": 0.035,
+  "maxEmaDistPct": 0.02,
+  "stochFilter": { "enabled": true, "overbought": 80, "oversold": 20 },
+  "confirmCandles": 1
 }
 ```
 
@@ -68,6 +71,18 @@ These control when the bot enters trades.
 | `atrPeriod` | 14 | ATR lookback period. Used for stop distance and entry confirmation. |
 | `atrMult` | 1.5 | ATR multiplier for entry confirmation. Price must move > atrMult * ATR from the trigger EMA. |
 | `maxStopPct` | 0.035 | Maximum stop distance as a fraction of entry price (3.5%). If ATR suggests a wider stop, it gets capped here. |
+
+### Signal Filters
+
+These filters help avoid late or exhausted entries.
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `maxEmaDistPct` | 0.02 | Skip signals when price is more than this % from the 1h EMA50. Prevents entering extended moves. 0 = disabled. |
+| `stochFilter.enabled` | true | Enable Stochastic RSI filter on 15m candles. |
+| `stochFilter.overbought` | 80 | Skip long entries when Stoch RSI is above this (overbought). |
+| `stochFilter.oversold` | 20 | Skip short entries when Stoch RSI is below this (oversold, bounce likely). |
+| `confirmCandles` | 1 | Number of consecutive 15m candles on the wrong side of EMA20 before a reclaim counts. 2 = stricter, fewer fakeouts. |
 
 ---
 
