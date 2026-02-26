@@ -165,6 +165,15 @@ body {
   50% { opacity: 0.5; box-shadow: 0 0 20px var(--neon-glow); }
 }
 
+/* Marquee */
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee 40s linear infinite;
+}
+
 /* Background */
 .grid-bg {
   background:
