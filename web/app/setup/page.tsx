@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Setup Guide — SIGNALBOT",
-  description: "Step-by-step guide to set up Signalbot: fund your wallet, install the app, configure settings, and start trading on Hyperliquid.",
+  description: "Step-by-step guide to set up Signalbot: fund your wallet, configure settings, and start trading on Hyperliquid.",
 };
 
 const CheckIcon = () => (
@@ -41,32 +41,6 @@ const walletSteps = [
   },
 ];
 
-const installSteps = [
-  {
-    title: "Install Node.js",
-    desc: "Download and install the LTS version from nodejs.org. This is a one-click installer for Mac, Windows, and Linux.",
-    code: null,
-  },
-  {
-    title: "Install Rust",
-    desc: "Open your terminal and run the following command. Follow the prompts (press Enter to accept defaults).",
-    code: 'curl --proto \'=https\' --tlsv1.2 -sSf https://sh.rustup.rs | sh\nsource "$HOME/.cargo/env"',
-  },
-  {
-    title: "Clone the repository",
-    desc: "Download the Signalbot source code and install dependencies.",
-    code: "git clone https://github.com/jtadiar/signalbot.git\ncd signalbot\nnpm install\ncd bot && npm install && cd ..",
-  },
-  {
-    title: "Launch the desktop app",
-    desc: "This builds and opens the Signalbot desktop app. The first run takes a few minutes to compile Rust.",
-    code: "npx tauri dev",
-  },
-  {
-    title: "Enter your license key",
-    desc: "The app will prompt you for a license key. Paste the key you received after purchasing. Then follow the setup wizard — enter your wallet address, private key, and risk parameters.",
-  },
-];
 
 export default function SetupPage() {
   return (
@@ -179,51 +153,11 @@ export default function SetupPage() {
         </div>
       </section>
 
-      {/* Section 2: Install the App */}
+      {/* Section 2: Configure */}
       <section className="pb-20 px-6 border-t border-white/[0.04] pt-20">
         <div className="max-w-3xl mx-auto">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-8 h-8 rounded-lg bg-[var(--neon)] flex items-center justify-center text-black font-bold text-sm">2</div>
-            <h2 className="heading-accent text-2xl md:text-3xl">
-              Install the <span className="text-[var(--neon)]">App</span>
-            </h2>
-          </div>
-          <p className="text-white/40 text-sm mb-10 ml-11">
-            Download, build, and launch the Signalbot desktop app.
-          </p>
-
-          <div className="space-y-4">
-            {installSteps.map((s, i) => (
-              <div key={i} className="p-5 rounded-2xl border border-white/[0.06] bg-white/[0.02]">
-                <div className="flex gap-4">
-                  <div className="mt-0.5 shrink-0">
-                    <div className="w-7 h-7 rounded-lg bg-[var(--neon)]/10 flex items-center justify-center">
-                      <CheckIcon />
-                    </div>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-sm mb-1">{s.title}</h3>
-                    <p className="text-white/35 text-sm leading-relaxed">{s.desc}</p>
-                  </div>
-                </div>
-                {s.code && (
-                  <div className="mt-3 ml-11 bg-black rounded-xl border border-white/[0.06] p-4 font-mono text-sm leading-relaxed overflow-x-auto">
-                    {s.code.split("\n").map((line, j) => (
-                      <div key={j} className="text-[var(--neon)]">{line}</div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Section 3: Configure */}
-      <section className="pb-20 px-6 border-t border-white/[0.04] pt-20">
-        <div className="max-w-3xl mx-auto">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-[var(--neon)] flex items-center justify-center text-black font-bold text-sm">3</div>
             <h2 className="heading-accent text-2xl md:text-3xl">
               Configure & <span className="text-[var(--neon)]">Trade</span>
             </h2>
