@@ -55,8 +55,8 @@ export default function StatusPill() {
 
   return (
     <div
-      className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full border border-white/[0.08] bg-white/[0.03] mb-10"
-      style={{ minWidth: 280 }}
+      className="inline-flex items-center justify-center gap-2.5 px-5 py-2.5 rounded-full border border-white/[0.08] bg-white/[0.03] mb-10"
+      style={{ width: 280 }}
     >
       <span className="relative flex h-2.5 w-2.5 shrink-0">
         <span className="animate-ping absolute inset-0 rounded-full bg-green-400 opacity-60" />
