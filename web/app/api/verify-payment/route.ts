@@ -3,6 +3,7 @@ import {
   createPublicClient,
   http,
   decodeEventLog,
+  type Chain,
   type Hex,
   type Address,
 } from "viem";
@@ -13,7 +14,7 @@ import { getStore } from "@netlify/blobs";
 const RECIPIENT: Address = "0x438b4CBA3aBEfb8Ea1588948187534E5f339cbE0";
 const MIN_AMOUNT = BigInt(29_000_000);
 
-const CHAINS: Record<number, typeof mainnet> = {
+const CHAINS: Record<number, Chain> = {
   [mainnet.id]: mainnet,
   [base.id]: base,
   [arbitrum.id]: arbitrum,
