@@ -153,11 +153,40 @@ export default function SetupPage() {
         </div>
       </section>
 
-      {/* Section 2: Configure */}
+      {/* Section 2: Install the App */}
       <section className="pb-20 px-6 border-t border-white/[0.04] pt-20">
         <div className="max-w-3xl mx-auto">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-8 h-8 rounded-lg bg-[var(--neon)] flex items-center justify-center text-black font-bold text-sm">2</div>
+            <h2 className="heading-accent text-2xl md:text-3xl">
+              Install the <span className="text-[var(--neon)]">App</span>
+            </h2>
+          </div>
+          <p className="text-white/40 text-sm mb-10 ml-11">
+            Download, install, and launch the Signalbot desktop app.
+          </p>
+
+          <div className="p-8 rounded-2xl border border-white/[0.06] bg-white/[0.02] text-center">
+            <div className="w-12 h-12 rounded-xl bg-[var(--neon)]/10 flex items-center justify-center mx-auto mb-4">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--neon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="5" y="2" width="14" height="20" rx="2" />
+                <path d="M9 22v-4h6v4" />
+                <path d="M12 8v4M10 10h4" />
+              </svg>
+            </div>
+            <p className="text-white/50 text-sm mb-6">
+              The installation guide and your unique license key will be provided after purchase.
+            </p>
+            <a href="/#pricing" className="btn-primary">Get Access — $29</a>
+          </div>
+        </div>
+      </section>
+
+      {/* Section 3: Configure */}
+      <section className="pb-20 px-6 border-t border-white/[0.04] pt-20">
+        <div className="max-w-3xl mx-auto">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-8 h-8 rounded-lg bg-[var(--neon)] flex items-center justify-center text-black font-bold text-sm">3</div>
             <h2 className="heading-accent text-2xl md:text-3xl">
               Configure & <span className="text-[var(--neon)]">Trade</span>
             </h2>
