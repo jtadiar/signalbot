@@ -38,10 +38,10 @@ export const TOKEN_ADDRESSES: Record<
 };
 
 export const SUPPORTED_CHAINS = [
-  { id: mainnet.id, name: "Ethereum" },
   { id: base.id, name: "Base" },
   { id: arbitrum.id, name: "Arbitrum" },
   { id: polygon.id, name: "Polygon" },
+  { id: mainnet.id, name: "Ethereum" },
 ];
 
 export const ERC20_ABI = [
