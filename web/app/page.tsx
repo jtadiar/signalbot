@@ -113,8 +113,8 @@ export default function Home() {
       </section>
 
       {/* Risk disclaimer ticker */}
-      <div className="bg-[var(--neon)] overflow-hidden py-2.5">
-        <div className="animate-marquee whitespace-nowrap flex gap-16 text-black text-xs font-semibold tracking-wide">
+      <div className="bg-[var(--neon)] overflow-hidden py-4">
+        <div className="animate-marquee whitespace-nowrap flex gap-16 text-black text-sm font-semibold italic tracking-wide">
           {Array.from({ length: 4 }).map((_, i) => (
             <span key={i} className="flex items-center gap-16 shrink-0">
               <span>⚠ Trading cryptocurrencies involves significant risk and may not be suitable for all investors.</span>
