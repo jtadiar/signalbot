@@ -1,35 +1,54 @@
 import GetKeyForm from "./components/GetKeyForm";
 
+const BarChartIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="12" width="4" height="9" rx="1" /><rect x="10" y="8" width="4" height="13" rx="1" /><rect x="17" y="3" width="4" height="18" rx="1" /></svg>
+);
+const CrosshairIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="22" y1="12" x2="18" y2="12" /><line x1="6" y1="12" x2="2" y2="12" /><line x1="12" y1="6" x2="12" y2="2" /><line x1="12" y1="22" x2="12" y2="18" /></svg>
+);
+const TrendingUpIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17" /><polyline points="16 7 22 7 22 13" /></svg>
+);
+const ShieldIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+);
+const MessageIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+);
+const LockIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+);
+
 const features = [
   {
     title: "EMA/ATR Signal Engine",
     desc: "50-period trend filter on 1h candles with 20-period trigger on 15m. ATR-confirmed entries with automatic stop distance calculation.",
-    icon: "📊",
+    Icon: BarChartIcon,
   },
   {
     title: "Native TP/SL on Hyperliquid",
     desc: "Take-profit ladder with two configurable levels. Stop-loss placed directly on HL as trigger orders — visible on your chart.",
-    icon: "🎯",
+    Icon: CrosshairIcon,
   },
   {
     title: "Trailing Stop",
     desc: "After TP2, the stop trails price by a configurable percentage. Lock in profits while letting winners run.",
-    icon: "📈",
+    Icon: TrendingUpIcon,
   },
   {
     title: "Risk Guardrails",
     desc: "Max leverage, daily loss limits, cooldowns after losses, and automatic position sizing. The bot protects your account.",
-    icon: "🛡️",
+    Icon: ShieldIcon,
   },
   {
     title: "Telegram Pings",
     desc: "Get instant notifications on every open, close, TP hit, and stop-out. Always know what your bot is doing.",
-    icon: "💬",
+    Icon: MessageIcon,
   },
   {
     title: "Your Keys, Your Machine",
     desc: "Private keys never leave your device. No cloud, no custody, no middlemen. Direct execution via Hyperliquid API.",
-    icon: "🔐",
+    Icon: LockIcon,
   },
 ];
 
@@ -143,8 +162,10 @@ export default function Home() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((f) => (
               <div key={f.title} className="card">
-                <div className="text-2xl mb-4">{f.icon}</div>
-                <h3 className="text-lg font-semibold mb-2">{f.title}</h3>
+                <div className="w-10 h-10 rounded-xl bg-[var(--neon)]/10 flex items-center justify-center mb-4 text-[var(--neon)]">
+                  <f.Icon />
+                </div>
+                <h3 className="text-lg font-semibold mb-2 italic">{f.title}</h3>
                 <p className="text-white/30 text-sm leading-relaxed">{f.desc}</p>
               </div>
             ))}
@@ -169,7 +190,7 @@ export default function Home() {
             ].map((s) => (
               <div key={s.step} className="text-center relative z-10">
                 <div className="w-14 h-14 rounded-2xl bg-[var(--neon)] flex items-center justify-center mx-auto mb-6 text-black font-bold text-lg glow-neon-sm">{s.step}</div>
-                <h3 className="font-semibold text-lg mb-3">{s.title}</h3>
+                <h3 className="font-semibold text-lg mb-3 italic">{s.title}</h3>
                 <p className="text-white/30 text-sm leading-relaxed">{s.desc}</p>
               </div>
             ))}
@@ -233,7 +254,7 @@ export default function Home() {
               { q: "How do I get my license key?", a: "Enter your email on this page. You'll instantly get your unique license key and full installation instructions." },
             ].map((faq) => (
               <div key={faq.q} className="card">
-                <h3 className="font-semibold mb-2">{faq.q}</h3>
+                <h3 className="font-semibold mb-2 italic">{faq.q}</h3>
                 <p className="text-white/30 text-sm leading-relaxed">{faq.a}</p>
               </div>
             ))}
