@@ -79,8 +79,12 @@ export default function Home() {
       </nav>
 
       {/* Hero */}
-      <section className="pt-40 pb-24 px-6 relative">
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full bg-[var(--neon)] opacity-[0.04] blur-[120px] pointer-events-none" />
+      <section className="pt-40 pb-24 px-6 relative overflow-hidden">
+        {/* Glowing orb */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/4 pointer-events-none" style={{ width: 800, height: 800 }}>
+          <div className="absolute inset-0 rounded-full" style={{ background: 'radial-gradient(circle, rgba(255,107,0,0.25) 0%, rgba(255,107,0,0.12) 20%, rgba(255,107,0,0.04) 45%, transparent 70%)', filter: 'blur(40px)' }} />
+          <div className="absolute inset-[25%] rounded-full" style={{ background: 'radial-gradient(circle, rgba(255,140,50,0.3) 0%, rgba(255,107,0,0.08) 50%, transparent 100%)', filter: 'blur(30px)' }} />
+        </div>
         
         <div className="max-w-4xl mx-auto text-center relative z-10">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/[0.08] bg-white/[0.03] mb-10">
