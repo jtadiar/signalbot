@@ -18,21 +18,24 @@ import {
 } from "@/lib/wagmi";
 
 type Token = "usdc" | "usdt";
-type Step = "email" | "connect" | "pay" | "confirming" | "verifying";
+type PayMethod = "crypto" | "card";
+type Step = "email" | "method" | "connect" | "pay" | "confirming" | "verifying";
 
 export default function GetKeyForm() {
   const [email, setEmail] = useState("");
+  const [payMethod, setPayMethod] = useState<PayMethod>("crypto");
   const [selectedChainId, setSelectedChainId] = useState(SUPPORTED_CHAINS[0].id);
   const [selectedToken, setSelectedToken] = useState<Token>("usdc");
   const [step, setStep] = useState<Step>("email");
   const [error, setError] = useState("");
   const [txHash, setTxHash] = useState<`0x${string}` | undefined>();
+  const [stripeLoading, setStripeLoading] = useState(false);
 
   const { address, isConnected, chain } = useAccount();
   const { switchChainAsync } = useSwitchChain();
   const { writeContractAsync, isPending: isSending } = useWriteContract();
 
-  const { isLoading: isConfirming, isSuccess: isConfirmed } =
+  const { isSuccess: isConfirmed } =
     useWaitForTransactionReceipt({ hash: txHash });
 
   const handleEmailSubmit = useCallback(() => {
@@ -41,7 +44,39 @@ export default function GetKeyForm() {
       return;
     }
     setError("");
-    setStep("connect");
+    setStep("method");
+  }, [email]);
+
+  const handleMethodSelect = useCallback(
+    (method: PayMethod) => {
+      setPayMethod(method);
+      setError("");
+      if (method === "crypto") {
+        setStep("connect");
+      }
+    },
+    []
+  );
+
+  const handleStripeCheckout = useCallback(async () => {
+    setStripeLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setError(data.error || "Could not create checkout session.");
+      }
+    } catch {
+      setError("Network error. Please try again.");
+    }
+    setStripeLoading(false);
   }, [email]);
 
   const handleProceedToPay = useCallback(() => {
@@ -119,6 +154,13 @@ export default function GetKeyForm() {
   const chainName =
     SUPPORTED_CHAINS.find((c) => c.id === selectedChainId)?.name ?? "";
 
+  const tabClass = (active: boolean) =>
+    `flex-1 py-3 px-4 rounded-xl text-sm font-semibold border transition-all ${
+      active
+        ? "border-[var(--neon)]/40 bg-[var(--neon)]/10 text-[var(--neon)]"
+        : "border-white/[0.06] text-white/30 hover:text-white/50 hover:border-white/10"
+    }`;
+
   return (
     <div className="space-y-4">
       {/* Step 1: Email */}
@@ -142,7 +184,61 @@ export default function GetKeyForm() {
         </>
       )}
 
-      {/* Step 2: Connect Wallet */}
+      {/* Step 2: Payment Method */}
+      {step === "method" && (
+        <div className="space-y-5">
+          <p className="text-white/40 text-sm text-center">
+            Choose how to pay {PRICE_DISPLAY}
+          </p>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => handleMethodSelect("crypto")}
+              className={tabClass(payMethod === "crypto")}
+            >
+              <div className="text-center">
+                <div className="text-lg mb-0.5">Crypto</div>
+                <div className="text-xs opacity-50 font-normal">USDC / USDT</div>
+              </div>
+            </button>
+            <button
+              onClick={() => {
+                setPayMethod("card");
+                setError("");
+              }}
+              className={tabClass(payMethod === "card")}
+            >
+              <div className="text-center">
+                <div className="text-lg mb-0.5">Card</div>
+                <div className="text-xs opacity-50 font-normal">Visa / Mastercard</div>
+              </div>
+            </button>
+          </div>
+
+          {payMethod === "card" && (
+            <>
+              {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+              <button
+                onClick={handleStripeCheckout}
+                disabled={stripeLoading}
+                className="btn-primary w-full justify-center text-lg"
+              >
+                {stripeLoading ? "Redirecting..." : `Pay ${PRICE_DISPLAY} with Card`}
+              </button>
+              <p className="text-xs text-white/15 text-center">Secure checkout powered by Stripe</p>
+            </>
+          )}
+
+          <button
+            onClick={() => { setStep("email"); setError(""); }}
+            className="w-full text-center text-sm text-white/25 hover:text-white/50 transition-colors"
+          >
+            Back
+          </button>
+        </div>
+      )}
+
+      {/* Step 3: Connect Wallet (crypto only) */}
       {step === "connect" && (
         <div className="space-y-4">
           <p className="text-white/40 text-sm text-center">
@@ -161,7 +257,7 @@ export default function GetKeyForm() {
           )}
           {error && <p className="text-red-500 text-sm text-center">{error}</p>}
           <button
-            onClick={() => { setStep("email"); setError(""); }}
+            onClick={() => { setStep("method"); setError(""); }}
             className="w-full text-center text-sm text-white/25 hover:text-white/50 transition-colors"
           >
             Back
@@ -169,7 +265,7 @@ export default function GetKeyForm() {
         </div>
       )}
 
-      {/* Step 3: Pay */}
+      {/* Step 4: Pay (crypto) */}
       {step === "pay" && (
         <div className="space-y-5">
           <div className="text-center">
@@ -177,7 +273,6 @@ export default function GetKeyForm() {
             <p className="text-white/40 text-sm">One-time payment</p>
           </div>
 
-          {/* Chain selector */}
           <div>
             <label className="block text-xs text-white/30 uppercase tracking-wider mb-2 text-center">
               Network
@@ -199,7 +294,6 @@ export default function GetKeyForm() {
             </div>
           </div>
 
-          {/* Token selector */}
           <div>
             <label className="block text-xs text-white/30 uppercase tracking-wider mb-2 text-center">
               Token
@@ -221,7 +315,6 @@ export default function GetKeyForm() {
             </div>
           </div>
 
-          {/* Wallet preview */}
           {address && (
             <div className="text-center text-xs text-white/20">
               Paying from{" "}
@@ -251,7 +344,7 @@ export default function GetKeyForm() {
         </div>
       )}
 
-      {/* Step 4: Confirming / Verifying */}
+      {/* Step 5: Confirming / Verifying */}
       {(step === "confirming" || step === "verifying") && (
         <div className="space-y-4 text-center">
           <div className="flex justify-center">

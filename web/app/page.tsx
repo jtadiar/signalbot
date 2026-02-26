@@ -175,12 +175,15 @@ export default function Home() {
           <h2 className="heading-accent text-4xl md:text-5xl mb-4">
             Get <span className="text-[var(--neon)] neon-text-glow">Access</span>
           </h2>
-          <p className="text-white/40 mb-14">Pay with USDC or USDT. License key delivered instantly on-chain.</p>
+          <p className="text-white/40 mb-14">Pay with crypto or card. License key delivered instantly.</p>
 
           <div className="card glow-neon !p-10 !border-[var(--neon)]/20">
             <div className="text-sm text-[var(--neon)] font-semibold uppercase tracking-wider mb-2">Signalbot License</div>
-            <div className="text-5xl font-black mb-1 text-white">$29</div>
-            <div className="text-[var(--neon)] font-bold text-sm mb-8 neon-text-glow">USDC / USDT — One-time payment</div>
+            <div className="flex items-baseline justify-center gap-3 mb-1">
+              <span className="text-3xl font-black text-white/25 line-through">$99</span>
+              <span className="text-5xl font-black text-[var(--neon)] neon-text-glow">$29</span>
+            </div>
+            <div className="text-white/40 font-medium text-sm mb-8">One-time payment</div>
 
             <ul className="text-left space-y-3 mb-10">
               {[
@@ -202,7 +205,7 @@ export default function Home() {
             <GetKeyForm />
 
             <p className="text-xs text-white/20 mt-4">
-              Pay with USDC or USDT on Ethereum, Base, Arbitrum, or Polygon.
+              Pay with crypto or card. License key delivered instantly.
             </p>
           </div>
         </div>

@@ -1,12 +1,37 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 
 function SuccessContent() {
   const params = useSearchParams();
-  const licenseKey = params.get("key");
+  const keyParam = params.get("key");
+  const sessionId = params.get("session_id");
+  const [licenseKey, setLicenseKey] = useState(keyParam || "");
   const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (sessionId && !licenseKey) {
+      setLoading(true);
+      fetch("/api/verify-stripe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.key) {
+            setLicenseKey(data.key);
+          } else {
+            setError(data.error || "Could not verify payment.");
+          }
+        })
+        .catch(() => setError("Network error. Please refresh the page."))
+        .finally(() => setLoading(false));
+    }
+  }, [sessionId, licenseKey]);
 
   function handleCopy() {
     if (licenseKey) {
@@ -16,13 +41,26 @@ function SuccessContent() {
     }
   }
 
+  if (loading) {
+    return (
+      <div className="grid-bg min-h-screen flex items-center justify-center px-6">
+        <div className="card max-w-lg w-full !p-10 text-center">
+          <div className="flex justify-center mb-4">
+            <div className="w-12 h-12 rounded-full border-3 border-white/10 border-t-[var(--neon)] animate-spin" />
+          </div>
+          <h1 className="text-2xl font-bold mb-2">Verifying payment...</h1>
+          <p className="text-[var(--text-muted)]">Confirming your Stripe payment and generating your license key.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!licenseKey) {
     return (
       <div className="grid-bg min-h-screen flex items-center justify-center px-6">
         <div className="card max-w-lg w-full !p-10 text-center">
-          <div className="text-4xl mb-4">⚠️</div>
-          <h1 className="text-2xl font-bold mb-2">No license key found</h1>
-          <p className="text-[var(--text-muted)] mb-6">Go back and enter your email to get a key.</p>
+          <h1 className="text-2xl font-bold mb-2">{error ? "Payment issue" : "No license key found"}</h1>
+          <p className="text-[var(--text-muted)] mb-6">{error || "Go back and complete payment to get a key."}</p>
           <a href="/#pricing" className="btn-primary inline-block">Get a Key</a>
         </div>
       </div>
