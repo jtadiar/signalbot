@@ -365,9 +365,9 @@ tr:hover td {
   background: rgba(255, 107, 0, 0.02);
 }
 
-.text-green { color: var(--green); }
-.text-red { color: var(--red); }
-.text-yellow { color: var(--yellow); }
+.text-green { color: var(--green) !important; }
+.text-red { color: var(--red) !important; }
+.text-yellow { color: var(--yellow) !important; }
 .text-muted { color: var(--text-muted); }
 .text-accent { color: var(--accent); }
 
