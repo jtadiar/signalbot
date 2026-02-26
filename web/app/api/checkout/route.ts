@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2026-02-25.clover",
-});
+function getStripe() {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error("STRIPE_SECRET_KEY is not configured.");
+  return new Stripe(key, { apiVersion: "2026-02-25.clover" });
+}
 
 const BASE_URL = process.env.NEXT_PUBLIC_URL || "https://hlsignalbot.netlify.app";
 
@@ -15,6 +17,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Valid email required." }, { status: 400 });
     }
 
+    const stripe = getStripe();
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       customer_email: email.trim().toLowerCase(),
