@@ -115,33 +115,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* App Preview */}
-      <section className="pb-32 px-6 relative">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[60%] h-[60%] rounded-full bg-[var(--neon)] opacity-[0.03] blur-[120px] pointer-events-none" />
-        <div className="max-w-5xl mx-auto relative z-10">
-          <div className="text-center mb-14">
-            <h2 className="heading-accent text-3xl md:text-4xl mb-4">
-              See it in <span className="text-[var(--neon)] neon-text-glow">action</span>
-            </h2>
-            <p className="text-white/40 text-base">Real-time dashboard and full trade history — right on your desktop.</p>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-8">
-            <div>
-              <div className="rounded-2xl overflow-hidden border border-white/[0.08] shadow-[0_8px_40px_rgba(255,107,0,0.06)] hover:shadow-[0_8px_60px_rgba(255,107,0,0.12)] transition-shadow duration-500">
-                <img src="/dashboard-preview.png" alt="Signalbot Dashboard — live position, PnL, and bot status" className="w-full h-auto block" />
-              </div>
-              <p className="text-center text-sm text-white/25 mt-4 italic">Live dashboard with position tracking</p>
-            </div>
-            <div>
-              <div className="rounded-2xl overflow-hidden border border-white/[0.08] shadow-[0_8px_40px_rgba(255,107,0,0.06)] hover:shadow-[0_8px_60px_rgba(255,107,0,0.12)] transition-shadow duration-500">
-                <img src="/tradelog-preview.png" alt="Signalbot Trade Log — win/loss history with PnL" className="w-full h-auto block" />
-              </div>
-              <p className="text-center text-sm text-white/25 mt-4 italic">Trade log with full PnL history</p>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* Features */}
       <section id="features" className="py-24 px-6 border-t border-white/[0.04]">
