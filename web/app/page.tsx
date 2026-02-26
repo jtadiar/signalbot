@@ -99,7 +99,7 @@ export default function Home() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-20">
-            <a href="#pricing" className="btn-primary text-lg">Get Started — Free</a>
+            <a href="#pricing" className="btn-primary text-lg">Get Started — $29</a>
             <a href="#features" className="btn-secondary text-lg">See Features</a>
           </div>
 
@@ -175,12 +175,12 @@ export default function Home() {
           <h2 className="heading-accent text-4xl md:text-5xl mb-4">
             Get <span className="text-[var(--neon)] neon-text-glow">Access</span>
           </h2>
-          <p className="text-white/40 mb-14">Enter your email to get a license key. Free during early access.</p>
+          <p className="text-white/40 mb-14">Pay with USDC or USDT. License key delivered instantly on-chain.</p>
 
           <div className="card glow-neon !p-10 !border-[var(--neon)]/20">
             <div className="text-sm text-[var(--neon)] font-semibold uppercase tracking-wider mb-2">Signalbot License</div>
-            <div className="text-5xl font-black mb-1 line-through text-white/20">$99</div>
-            <div className="text-[var(--neon)] font-bold text-xl mb-8 neon-text-glow">FREE — Early Access</div>
+            <div className="text-5xl font-black mb-1 text-white">$29</div>
+            <div className="text-[var(--neon)] font-bold text-sm mb-8 neon-text-glow">USDC / USDT — One-time payment</div>
 
             <ul className="text-left space-y-3 mb-10">
               {[
@@ -202,7 +202,7 @@ export default function Home() {
             <GetKeyForm />
 
             <p className="text-xs text-white/20 mt-4">
-              License key delivered instantly. No credit card required.
+              Pay with USDC or USDT on Ethereum, Base, Arbitrum, or Polygon.
             </p>
           </div>
         </div>
@@ -218,9 +218,9 @@ export default function Home() {
               { q: "What do I need to run the bot?", a: "Node.js and Rust (both free, quick installs), plus a Hyperliquid account with USDC deposited. After getting your key, you'll see step-by-step install instructions." },
               { q: "Can I customize the trading strategy?", a: "Yes. Every parameter is configurable: TP distances, trailing stop tightness, leverage, risk per trade, signal sensitivity, cooldowns, and more. See the CONFIGURATION.md guide." },
               { q: "Does it work on Mac and Windows?", a: "Yes. The CLI runs on any platform with Node.js — macOS, Windows, and Linux." },
-              { q: "Is this free?", a: "Yes, Signalbot is free during early access. Pricing may change in the future — get your key now to lock in free access." },
+              { q: "How much does it cost?", a: "Signalbot is a one-time $29 payment in USDC or USDT. No subscriptions, no recurring fees. Pay on Ethereum, Base, Arbitrum, or Polygon." },
               { q: "What pairs does it trade?", a: "Currently BTC-PERP on Hyperliquid. Additional pairs may be added in future updates." },
-              { q: "How do I get my license key?", a: "Enter your email on this page. You'll instantly get your unique license key and full installation instructions." },
+              { q: "How do I get my license key?", a: "Enter your email, connect your wallet, and pay $29 USDC or USDT. Once the transaction confirms on-chain, your license key is generated instantly." },
             ].map((faq) => (
               <div key={faq.q} className="card">
                 <h3 className="font-semibold mb-2 italic">{faq.q}</h3>
