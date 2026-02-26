@@ -215,8 +215,8 @@ export default function Settings() {
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
           marginBottom: 20, padding: 12, borderRadius: 8,
-          background: hasEdits ? 'rgba(79, 140, 255, 0.06)' : 'transparent',
-          border: hasEdits ? '1px solid rgba(79, 140, 255, 0.2)' : '1px solid transparent',
+          background: hasEdits ? 'rgba(255, 107, 0, 0.06)' : 'transparent',
+          border: hasEdits ? '1px solid rgba(255, 107, 0, 0.15)' : '1px solid transparent',
         }}>
           <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
             {saved ? 'Changes saved.' : hasEdits ? 'You have unsaved changes.' : ''}
@@ -603,8 +603,8 @@ export default function Settings() {
             background: 'var(--bg-secondary)', border: '1px solid var(--border)',
             borderRadius: 12, padding: '32px 40px', maxWidth: 400, textAlign: 'center',
           }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 32, marginBottom: 16 }}>✓</div>
-            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Settings Saved</h3>
+            <div style={{ fontSize: 32, marginBottom: 16, color: 'var(--accent)' }}>✓</div>
+            <h3 style={{ fontSize: 16, fontWeight: 800, fontStyle: 'italic', marginBottom: 8 }}>Settings Saved</h3>
             <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6, marginBottom: 24 }}>
               Restart the bot for your changes to take effect.
             </p>

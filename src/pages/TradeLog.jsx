@@ -193,12 +193,15 @@ export default function TradeLog() {
                       <td>
                         {t.isLive ? (
                           <span style={{
-                            fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
-                            background: 'var(--accent)', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.5px',
+                            fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+                            background: 'rgba(255, 107, 0, 0.12)', color: 'var(--accent)',
+                            border: '1px solid rgba(255, 107, 0, 0.2)',
+                            textTransform: 'uppercase', letterSpacing: '0.5px',
+                            boxShadow: '0 0 8px rgba(255, 107, 0, 0.1)',
                           }}>Live</span>
                         ) : (
                           <span style={{
-                            fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10,
+                            fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 99,
                             background: pnl >= 0 ? 'var(--green-bg)' : 'var(--red-bg)',
                             color: pnl >= 0 ? 'var(--green)' : 'var(--red)',
                             textTransform: 'uppercase', letterSpacing: '0.5px',

@@ -201,8 +201,9 @@ export default function Dashboard() {
 
       {lastError && (
         <div style={{
-          background: 'var(--red)', color: '#fff', padding: '10px 16px', borderRadius: 8,
-          marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'var(--red-bg)', border: '1px solid rgba(248, 113, 113, 0.2)', color: 'var(--red)',
+          padding: '10px 16px', borderRadius: 12, marginBottom: 16,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           fontSize: 13, fontWeight: 600,
         }}>
           <span>
@@ -217,15 +218,15 @@ export default function Dashboard() {
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
             {running && (
               <button onClick={handleRestart} disabled={starting} style={{
-                background: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', borderRadius: 6,
-                padding: '4px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                background: 'rgba(248, 113, 113, 0.15)', color: 'var(--red)', border: '1px solid rgba(248, 113, 113, 0.2)',
+                borderRadius: 99, padding: '4px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
               }}>
                 {starting ? 'Restarting...' : 'Restart'}
               </button>
             )}
             <button onClick={() => setLastError(null)} style={{
-              background: 'none', color: 'rgba(255,255,255,0.7)', border: 'none',
-              fontSize: 16, cursor: 'pointer', lineHeight: 1, padding: '0 4px',
+              background: 'none', color: 'var(--red)', border: 'none',
+              fontSize: 16, cursor: 'pointer', lineHeight: 1, padding: '0 4px', opacity: 0.7,
             }}>
               ×
             </button>
@@ -259,10 +260,10 @@ export default function Dashboard() {
         >
           <div
             className="card"
-            style={{ maxWidth: 380, borderColor: 'var(--yellow)', background: 'var(--bg-secondary)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}
+            style={{ maxWidth: 380, borderColor: 'rgba(255, 107, 0, 0.3)', background: 'var(--bg-secondary)', boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 40px rgba(255, 107, 0, 0.08)' }}
             onClick={e => e.stopPropagation()}
           >
-            <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 8 }}>Close this trade?</div>
+            <div style={{ fontWeight: 800, fontStyle: 'italic', fontSize: 16, marginBottom: 8 }}>Close this trade?</div>
             <div className="text-muted" style={{ fontSize: 13, marginBottom: 16 }}>This will market-close your position and cancel TP/SL orders. If the position is already closed, the display will be refreshed.</div>
             <div style={{ display: 'flex', gap: 12 }}>
               <button
@@ -415,7 +416,7 @@ export default function Dashboard() {
               Analysing EMA/ATR signals on BTC-PERP every {Math.round((position?.pollMs || 20000) / 1000)}s
             </div>
             {lastSignal && (
-              <div style={{ marginTop: 12, fontSize: 12, padding: '6px 12px', borderRadius: 6, background: 'var(--bg-secondary)' }}>
+              <div style={{ marginTop: 12, fontSize: 12, padding: '6px 12px', borderRadius: 99, background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
                 Last signal: <span className={lastSignal.side === 'long' ? 'text-green' : 'text-red'} style={{ fontWeight: 600 }}>{lastSignal.side?.toUpperCase()}</span>
                 <span className="text-muted"> — {lastSignal.reason?.slice(0, 60)}</span>
               </div>

@@ -61,7 +61,7 @@ export default function App() {
   }
 
   if (configured === null) {
-    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg-primary)', color: 'var(--text-muted)' }}>Loading...</div>;
+    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg-primary)', color: 'var(--accent)' }}>Loading...</div>;
   }
 
   if (!configured) {

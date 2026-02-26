@@ -132,7 +132,7 @@ export default function Setup({ onComplete }) {
   }
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--bg-primary)', padding: 24 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'radial-gradient(ellipse 50% 40% at 50% 30%, rgba(255, 107, 0, 0.04), transparent), var(--bg-primary)', padding: 24 }}>
       <div className="wizard">
         <div className="wizard-step">Step {step} of {TOTAL_STEPS}</div>
 
