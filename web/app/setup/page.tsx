@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import TopTips from "../components/TopTips";
 
 export const metadata: Metadata = {
   title: "Setup Guide — SIGNALBOT",
@@ -102,6 +103,9 @@ export default function SetupPage() {
           </div>
         </div>
       </section>
+
+      {/* Top Tips */}
+      <TopTips />
 
       {/* Section 1: Fund Your Wallet */}
       <section className="pb-20 px-6 border-t border-white/[0.04] pt-20">
