@@ -59,10 +59,14 @@ export function computeSignal({ closes15m, closes1h, highs15m, lows15m, priceNow
     return ((rsiValues[rsiValues.length - 1] - minRsi) / (maxRsi - minRsi)) * 100;
   }
 
-  const ema1h50 = ema(closes1h, 50);
-  const ema15m20 = ema(closes15m, 20);
-  const atr15 = atr(highs15m, lows15m, closes15m, 14);
-  if (!ema1h50 || !ema15m20 || !atr15) return null;
+  const trendPeriod = Number(cfg?.signal?.emaTrendPeriod ?? 50);
+  const triggerPeriod = Number(cfg?.signal?.emaTriggerPeriod ?? 20);
+  const atrPeriod = Number(cfg?.signal?.atrPeriod ?? 14);
+
+  const ema1h = ema(closes1h, trendPeriod);
+  const ema15m = ema(closes15m, triggerPeriod);
+  const atr15 = atr(highs15m, lows15m, closes15m, atrPeriod);
+  if (!ema1h || !ema15m || !atr15) return null;
 
   const atrPct = atr15 / priceNow;
   if (cfg.risk?.atrMinPct && atrPct < cfg.risk.atrMinPct) return null;
@@ -71,17 +75,17 @@ export function computeSignal({ closes15m, closes1h, highs15m, lows15m, priceNow
   const prevClose15 = closes15m[closes15m.length-2];
   const prev2Close15 = closes15m.length >= 3 ? closes15m[closes15m.length-3] : null;
 
-  const trendUp = priceNow > ema1h50;
-  const trendDown = priceNow < ema1h50;
+  const trendUp = priceNow > ema1h;
+  const trendDown = priceNow < ema1h;
 
   // Pullback + reclaim: previous close on wrong side of EMA20, then close back.
-  const reclaimedUp = (prevClose15 <= ema15m20) && (lastClose15 > ema15m20);
-  const reclaimedDown = (prevClose15 >= ema15m20) && (lastClose15 < ema15m20);
+  const reclaimedUp = (prevClose15 <= ema15m) && (lastClose15 > ema15m);
+  const reclaimedDown = (prevClose15 >= ema15m) && (lastClose15 < ema15m);
 
   // ---- Filter 1: Distance-from-EMA (reject extended moves) ----
   const maxEmaDistPct = Number(cfg?.signal?.maxEmaDistPct ?? 0);
   if (maxEmaDistPct > 0) {
-    const dist = Math.abs(priceNow - ema1h50) / ema1h50;
+    const dist = Math.abs(priceNow - ema1h) / ema1h;
     if (dist > maxEmaDistPct) return null;
   }
 
@@ -103,10 +107,10 @@ export function computeSignal({ closes15m, closes1h, highs15m, lows15m, priceNow
   if (confirmCandles >= 2 && prev2Close15 !== null) {
     // For 2-candle confirmation: require 2 consecutive closes on the reclaim side
     if (trendUp && reclaimedUp) {
-      if (!(prev2Close15 <= ema15m20)) return null;
+      if (!(prev2Close15 <= ema15m)) return null;
     }
     if (trendDown && reclaimedDown) {
-      if (!(prev2Close15 >= ema15m20)) return null;
+      if (!(prev2Close15 >= ema15m)) return null;
     }
   }
 
@@ -117,11 +121,11 @@ export function computeSignal({ closes15m, closes1h, highs15m, lows15m, priceNow
 
   const reasons = [];
   if (trendUp && reclaimedUp){
-    reasons.push('trendUp (1h EMA50)', '15m reclaim EMA20');
+    reasons.push(`trendUp (1h EMA${trendPeriod})`, `15m reclaim EMA${triggerPeriod}`);
     return { side: 'long', stopPct, reason: reasons.join(' + ') + `; atrPct=${atrPct.toFixed(4)}` };
   }
   if (trendDown && reclaimedDown){
-    reasons.push('trendDown (1h EMA50)', '15m reclaim EMA20');
+    reasons.push(`trendDown (1h EMA${trendPeriod})`, `15m reclaim EMA${triggerPeriod}`);
     return { side: 'short', stopPct, reason: reasons.join(' + ') + `; atrPct=${atrPct.toFixed(4)}` };
   }
   return null;
