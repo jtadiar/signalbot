@@ -482,6 +482,40 @@ export default function Settings() {
           </div>
         </div>
 
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-title">EMA Trend-Break Exit</div>
+          <p className="form-hint" style={{ marginBottom: 12 }}>
+            Close the entire position early if price breaks the trigger EMA — catches reversals before the hard stop is hit.
+          </p>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 12 }}>
+            <input
+              type="checkbox"
+              checked={String(config.exits?.emaTrendBreakExit?.enabled ?? false).toLowerCase() !== 'false'}
+              onChange={e => {
+                const tbe = config.exits?.emaTrendBreakExit || {};
+                update('exits.emaTrendBreakExit', { confirmCandles: tbe.confirmCandles ?? 1, enabled: e.target.checked });
+              }}
+            />
+            <span>Enable trend-break exit</span>
+            <Tip text="When enabled, the bot closes your position if the 15m candle closes on the wrong side of your trigger EMA (e.g. below EMA for longs, above for shorts). This exits before the hard stop loss is hit." />
+          </label>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label" style={{ fontSize: 11 }}>Confirm candles <Tip text="How many consecutive 15m candles must close on the wrong side of the EMA before the bot exits. 1 = exit on the first candle that breaks the EMA. 2 = wait for a second confirmation candle (reduces false exits but reacts slower)." /></label>
+            <input
+              className="form-input"
+              type="number"
+              min="1"
+              max="5"
+              value={config.exits?.emaTrendBreakExit?.confirmCandles ?? 1}
+              onChange={e => {
+                const tbe = config.exits?.emaTrendBreakExit || {};
+                update('exits.emaTrendBreakExit', { enabled: String(tbe.enabled ?? false).toLowerCase() !== 'false', confirmCandles: Number(e.target.value) });
+              }}
+            />
+            <div className="form-hint">1 = fast exit on first break, 2+ = wait for confirmation</div>
+          </div>
+        </div>
+
         <div className="card" style={{ borderColor: 'rgba(248, 113, 113, 0.2)', background: 'rgba(248, 113, 113, 0.04)' }}>
           <div className="card-title" style={{ color: 'var(--red)' }}>Danger Zone</div>
           <button className="btn btn-outline" onClick={handleReset} style={{ borderColor: 'var(--red)', color: 'var(--red)' }}>Reset All Settings &amp; Re-run Setup</button>

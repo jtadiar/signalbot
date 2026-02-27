@@ -1,14 +1,15 @@
 // Standalone BTC-PERP signal engine (EMA trend + EMA pullback + ATR stop sizing)
 // Returns: { side: 'long'|'short', stopPct, reason } or null
 
+export function ema(arr, period) {
+  if (!arr || arr.length < period) return null;
+  const k = 2 / (period + 1);
+  let e = arr.slice(0, period).reduce((a,b)=>a+b,0) / period;
+  for (let i=period;i<arr.length;i++) e = arr[i]*k + e*(1-k);
+  return e;
+}
+
 export function computeSignal({ closes15m, closes1h, highs15m, lows15m, priceNow, cfg }){
-  const ema = (arr, period) => {
-    if (!arr || arr.length < period) return null;
-    const k = 2 / (period + 1);
-    let e = arr.slice(0, period).reduce((a,b)=>a+b,0) / period;
-    for (let i=period;i<arr.length;i++) e = arr[i]*k + e*(1-k);
-    return e;
-  };
   const atr = (highs, lows, closes, period) => {
     if (!highs || !lows || !closes || highs.length < period+1) return null;
     const trs=[];

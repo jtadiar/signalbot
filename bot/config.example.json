@@ -39,6 +39,7 @@
     "trailToBreakevenOnTp1": true,
     "trailStopToTp1OnTp2": true,
     "trailingAfterTp2": { "enabled": true, "kind": "pct", "trailPct": 0.005, "minUpdateSeconds": 20 },
+    "emaTrendBreakExit": { "enabled": false, "confirmCandles": 1 },
 
     "tp": [
       {"pct": 0.01, "closeFrac": 0.25},

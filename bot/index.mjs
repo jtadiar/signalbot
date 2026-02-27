@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { homedir } from 'os';
 import { Hyperliquid } from 'hyperliquid';
-import { computeSignal } from './signal_engine.mjs';
+import { computeSignal, ema } from './signal_engine.mjs';
 import { candleSnapshot, allMids, spotClearinghouseState } from './hl_info.mjs';
 
 const IS_TAURI = !!process.env.TAURI;
@@ -861,6 +861,60 @@ async function manageOpenPosition(pos){
       }
     }
   } catch {}
+
+  // ---- EMA trend-break exit ----
+  try {
+    const tbe = cfg?.exits?.emaTrendBreakExit;
+    const tbeEnabled = !!(tbe && String(tbe.enabled).toLowerCase() !== 'false');
+    if (tbeEnabled) {
+      const tbeConfirm = Number(tbe.confirmCandles ?? 1);
+      const triggerPeriod = Number(cfg?.signal?.emaTriggerPeriod ?? 20);
+      const symbol = `${cfg.market.coin}-PERP`;
+      const c15 = await fetchOHLC(symbol, '15m', 3*24*60*60*1000);
+      const emaVal = ema(c15.closes, triggerPeriod);
+      if (emaVal !== null && c15.closes.length >= tbeConfirm + 1) {
+        let breached = true;
+        for (let k = 0; k < tbeConfirm; k++) {
+          const closeK = c15.closes[c15.closes.length - 1 - k];
+          if (side === 'long' ? (closeK >= emaVal) : (closeK <= emaVal)) {
+            breached = false;
+            break;
+          }
+        }
+        if (breached) {
+          console.log(nowIso(), `EMA trend-break exit: ${tbeConfirm} candle(s) closed ${side === 'long' ? 'below' : 'above'} EMA${triggerPeriod} (${roundPx(cfg.market.coin, emaVal)}). Closing position.`);
+          tauriEmit({ type: 'log', message: `Trend-break exit: price broke EMA${triggerPeriod}` });
+          await cancelAllBtcOrders({ cancelStops: true, cancelTps: true }).catch(()=>{});
+          const closeResp = await sdk.custom.marketClose(`${cfg.market.coin}-PERP`).catch(()=>null);
+          try {
+            const fill = closeResp?.response?.data?.statuses?.[0]?.filled;
+            const exitPx = Number(fill?.avgPx || px);
+            const exitSz = Number(fill?.totalSz || absSz);
+            const pnlUsd = (exitPx && state.entryPx)
+              ? ((side==='short' ? (state.entryPx - exitPx) : (exitPx - state.entryPx)) * exitSz)
+              : null;
+            const ev = { ts: nowIso(), action: 'CLOSE', side, sizeBtc: exitSz, entryPx: state.entryPx, exitPx, pnlUsd, leader: 'signalbot', reason: `EMA${triggerPeriod} trend-break` };
+            fs.appendFileSync(TRADE_LOG, JSON.stringify(ev) + "\n");
+            if (pnlUsd !== null && pnlUsd < 0) state.lastLossAtMs = Date.now();
+          } catch {}
+          state.lastExitAtMs = Date.now();
+          state.activeSide = null;
+          state.entryPx = null;
+          state.initialSz = null;
+          state.marginUsd = null;
+          state.stopPct = null;
+          state.stopPx = null;
+          state.tp1Done = false;
+          state.tp2Done = false;
+          state.exitsPlacedForPosKey = null;
+          persistState();
+          return;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn(nowIso(), 'EMA trend-break check error:', e.message || e);
+  }
 
   // ---- Stop-out backstop ----
   // IMPORTANT: If a native HL stop trigger exists, treat it as the source of truth.
