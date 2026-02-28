@@ -57,6 +57,12 @@
   "sdk": {
     "disableAssetMapRefresh": true
   },
+  "setAndForget": {
+    "enabled": false,
+    "leverage": 8,
+    "marginUsePct": 0.75,
+    "maxDailyLossUsd": 100
+  },
   "display": {
     "timezone": "UTC"
   },

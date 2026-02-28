@@ -228,8 +228,69 @@ export default function Settings() {
           </div>
         </div>
 
+        {/* Set & Forget Mode */}
+        <div style={{
+          marginBottom: 16, padding: 16, borderRadius: 12,
+          border: config.setAndForget?.enabled ? '1px solid rgba(255, 107, 0, 0.4)' : '1px solid var(--border)',
+          background: config.setAndForget?.enabled ? 'rgba(255, 107, 0, 0.04)' : 'var(--bg-card)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: config.setAndForget?.enabled ? 12 : 0 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, fontStyle: 'italic', color: config.setAndForget?.enabled ? 'var(--accent)' : 'var(--text-primary)' }}>Set & Forget</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Autopilot mode — tight stops, trailing exits, trend-chasing scalper</div>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={!!config.setAndForget?.enabled}
+                onChange={e => {
+                  const next = JSON.parse(JSON.stringify(config));
+                  if (!next.setAndForget) next.setAndForget = {};
+                  next.setAndForget.enabled = e.target.checked;
+                  if (e.target.checked) {
+                    next.setAndForget.leverage = next.setAndForget.leverage || Number(next.risk?.maxLeverage) || 8;
+                    next.setAndForget.marginUsePct = next.setAndForget.marginUsePct || Number(next.risk?.marginUsePct) || 0.75;
+                    next.setAndForget.maxDailyLossUsd = next.setAndForget.maxDailyLossUsd || Number(next.risk?.maxDailyLossUsd) || 100;
+                  }
+                  setConfig(next);
+                  setHasEdits(true);
+                  setSaved(false);
+                }}
+              />
+            </label>
+          </div>
+          {config.setAndForget?.enabled && (
+            <div>
+              <div style={{
+                padding: 10, borderRadius: 8, marginBottom: 14,
+                background: 'rgba(255, 107, 0, 0.08)', border: '1px solid rgba(255, 107, 0, 0.15)',
+                fontSize: 11, color: '#f97316', lineHeight: 1.5,
+              }}>
+                This mode overrides all other settings. The bot will scalp trends with tight ATR stops and a trailing exit — no fixed take-profit targets. Profits are not guaranteed and losses will occur. Your stop loss trails behind price to lock in gains as the trade moves.
+              </div>
+              <div className="grid-2" style={{ gap: 12 }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Leverage</label>
+                  <input className="form-input" type="number" min="1" max="50" value={config.setAndForget?.leverage || 8}
+                    onChange={e => { const next = JSON.parse(JSON.stringify(config)); next.setAndForget.leverage = Number(e.target.value); setConfig(next); setHasEdits(true); setSaved(false); }} />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Margin use %</label>
+                  <input className="form-input" type="number" min="10" max="100" step="5" value={Math.round((config.setAndForget?.marginUsePct || 0.75) * 100)}
+                    onChange={e => { const next = JSON.parse(JSON.stringify(config)); next.setAndForget.marginUsePct = Number(e.target.value) / 100; setConfig(next); setHasEdits(true); setSaved(false); }} />
+                </div>
+              </div>
+              <div className="form-group" style={{ marginTop: 12, marginBottom: 0 }}>
+                <label className="form-label">Max daily loss (USD) <Tip text="Bot pauses for the day if total losses exceed this amount. Resets at UTC midnight." /></label>
+                <input className="form-input" type="number" min="10" step="10" value={config.setAndForget?.maxDailyLossUsd || 100}
+                  onChange={e => { const next = JSON.parse(JSON.stringify(config)); next.setAndForget.maxDailyLossUsd = Number(e.target.value); setConfig(next); setHasEdits(true); setSaved(false); }} />
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Preset Profiles */}
-        <div style={{ marginBottom: 16, padding: 16, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg-card)' }}>
+        <div style={{ marginBottom: 16, padding: 16, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg-card)', opacity: config.setAndForget?.enabled ? 0.35 : 1, pointerEvents: config.setAndForget?.enabled ? 'none' : 'auto' }}>
           <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 10 }}>Quick Presets</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
             {[
@@ -297,6 +358,7 @@ export default function Settings() {
           <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 8 }}>Select a preset to auto-fill settings. You can still customise individual values after.</div>
         </div>
 
+        <div style={{ opacity: config.setAndForget?.enabled ? 0.3 : 1, pointerEvents: config.setAndForget?.enabled ? 'none' : 'auto', transition: 'opacity 0.2s' }}>
         {/* Risk Meter */}
         {(() => {
           const leverage = Number(config.risk?.maxLeverage || 10);
@@ -693,6 +755,8 @@ export default function Settings() {
             <div className="form-hint">1 = fast exit on first break, 2+ = wait for confirmation</div>
           </div>
         </div>
+
+        </div>{/* end grey-out wrapper */}
 
         <div className="card" style={{ borderColor: 'rgba(248, 113, 113, 0.2)', background: 'rgba(248, 113, 113, 0.04)' }}>
           <div className="card-title" style={{ color: 'var(--red)' }}>Danger Zone</div>

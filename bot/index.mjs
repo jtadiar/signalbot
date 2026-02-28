@@ -36,6 +36,50 @@ const CONFIG_PATH = process.env.CONFIG || path.join(DATA_DIR, 'config.json');
 const TRADE_LOG = process.env.TRADE_LOG || path.join(DATA_DIR, 'trades.jsonl');
 const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
 
+// ---- Set & Forget mode override ----
+const SAF_ENABLED = !!(cfg.setAndForget && String(cfg.setAndForget.enabled).toLowerCase() !== 'false');
+if (SAF_ENABLED) {
+  const saf = cfg.setAndForget;
+  const lev = Number(saf.leverage || 8);
+  const marginPct = Number(saf.marginUsePct || 0.75);
+  const maxLoss = Number(saf.maxDailyLossUsd || 100);
+
+  cfg.risk.maxLeverage = lev;
+  cfg.risk.marginUsePct = marginPct;
+  cfg.risk.maxDailyLossUsd = maxLoss;
+  cfg.risk.riskPerTradePct = 0.015;
+  cfg.risk.reentryCooldownSeconds = 60;
+  cfg.risk.lossCooldownMinutes = 5;
+
+  cfg.signal.emaTrendPeriod = 50;
+  cfg.signal.emaTriggerPeriod = 15;
+  cfg.signal.atrPeriod = 10;
+  cfg.signal.atrMult = 1.0;
+  cfg.signal.maxStopPct = 0.025;
+  cfg.signal.confirmCandles = 1;
+  cfg.signal.trendMode = 'withTrendOnly';
+  cfg.signal.entryOnCandleClose = true;
+  cfg.signal.blockShortIfGreenCandle = true;
+  if (!cfg.signal.stochFilter) cfg.signal.stochFilter = {};
+  cfg.signal.stochFilter.enabled = true;
+  cfg.signal.stochFilter.overbought = 80;
+  cfg.signal.stochFilter.oversold = 20;
+
+  cfg.exits.tp = [];
+  cfg.exits.trailToBreakevenOnTp1 = false;
+  cfg.exits.trailStopToTp1OnTp2 = false;
+  cfg.exits.trailingAfterTp2 = { enabled: false };
+  if (!cfg.exits.emaTrendBreakExit) cfg.exits.emaTrendBreakExit = {};
+  cfg.exits.emaTrendBreakExit.enabled = false;
+  cfg.exits.stopLossPct = 0.05;
+  cfg.exits.maxMarginLossPct = 0.15;
+  cfg.exits.runnerExit = 'signal';
+
+  cfg.exits._setAndForgetTrail = { enabled: true, trailPct: 0.006, minUpdateSeconds: 15 };
+
+  console.log('SET & FORGET mode active — config overridden. Leverage:', lev, 'Margin:', (marginPct * 100) + '%', 'MaxDailyLoss:', maxLoss);
+}
+
 // ---- Env overrides (secrets + user-local settings) ----
 // Prefer injecting secrets via env rather than editing tracked files.
 if (process.env.HL_WALLET_ADDRESS) cfg.wallet.address = String(process.env.HL_WALLET_ADDRESS).trim();
@@ -831,6 +875,32 @@ async function manageOpenPosition(pos){
     }
   }
 
+  // ---- Set & Forget trailing stop (from entry) ----
+  try {
+    const safTrail = cfg?.exits?._setAndForgetTrail;
+    const safOn = !!(safTrail && String(safTrail.enabled).toLowerCase() !== 'false');
+    if (safOn) {
+      const trailPct = Number(safTrail.trailPct ?? 0.006);
+      const minSec = Number(safTrail.minUpdateSeconds ?? 15);
+      const now = Date.now();
+      if ((now - (state.lastTrailAtMs || 0)) >= minSec * 1000) {
+        const candidate = side === 'long' ? (px * (1 - trailPct)) : (px * (1 + trailPct));
+        if (candidate && candidate > 0) {
+          const curStop = Number(state.stopPx || 0);
+          const improved = side === 'long' ? (candidate > curStop) : (curStop === 0 ? true : candidate < curStop);
+          if (improved) {
+            await replaceStop({ side, stopPx: candidate, absSz });
+            console.log(nowIso(), `[S&F] Trail: ${roundPx(cfg.market.coin, curStop)} → ${roundPx(cfg.market.coin, candidate)} (mid=${roundPx(cfg.market.coin, px)}, trail=${(trailPct*100).toFixed(1)}%)`);
+            tauriEmit({ type: 'log', message: `Trailing stop moved to ${roundPx(cfg.market.coin, candidate)}` });
+            state.stopPx = candidate;
+            state.lastTrailAtMs = now;
+            persistState();
+          }
+        }
+      }
+    }
+  } catch {}
+
   // ---- Trailing stop (after TP2) ----
   try {
     const tr = cfg?.exits?.trailingAfterTp2;
@@ -1170,11 +1240,11 @@ async function tryEnter(){
       }).filter(Boolean).join(' | ');
 
       const msg = [
-        `HL SIGNALBOT OPEN`,
+        SAF_ENABLED ? `HL SIGNALBOT [S&F] OPEN` : `HL SIGNALBOT OPEN`,
         `${sig.side.toUpperCase()} BTC`,
         `${roundSz(cfg.market.coin, totalSz)} @ ${roundPx(cfg.market.coin, avgPx)}`,
         `SL ${roundPx(cfg.market.coin, stopPx)}`,
-        tps ? tps : null,
+        SAF_ENABLED ? 'Trailing exit' : (tps || null),
       ].filter(Boolean).join(' | ');
       await tgSend(msg);
     } catch {}
@@ -1370,8 +1440,9 @@ function onLoopError(e){
   persistState();
 }
 
-console.log(nowIso(), 'HL signalbot starting', { wallet: cfg.wallet.address, coin: cfg.market.coin, pollMs: cfg.signal.pollMs });
+console.log(nowIso(), 'HL signalbot starting', { wallet: cfg.wallet.address, coin: cfg.market.coin, pollMs: cfg.signal.pollMs, setAndForget: SAF_ENABLED });
 tauriEmit({ type: 'started' });
+if (SAF_ENABLED) tauriEmit({ type: 'log', message: 'Set & Forget mode active — trailing scalper profile loaded' });
 
 // Prevent overlapping loops (can cause duplicate entries and duplicate TP/SL placement)
 let loopInFlight = false;
