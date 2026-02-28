@@ -1,6 +1,60 @@
 import { useState, useEffect } from 'react';
 import { readConfig } from '../lib/config';
 
+function buildPositions(fills) {
+  const sorted = [...fills].sort((a, b) => Number(a.time) - Number(b.time));
+  const positions = [];
+  let pos = null;
+  let netSz = 0;
+
+  for (const f of sorted) {
+    const dir = String(f.dir || '').toLowerCase();
+    const isOpen = dir.includes('open');
+    const isClose = dir.includes('close');
+    const side = dir.includes('long') ? 'long' : 'short';
+    const px = Number(f.px || 0);
+    const sz = Number(f.sz || 0);
+    const time = Number(f.time || 0);
+
+    if (isOpen) {
+      if (pos && pos.side !== side && netSz > 0.00001) {
+        positions.push(pos);
+        pos = null;
+        netSz = 0;
+      }
+      if (!pos) {
+        pos = { side, entryWeighted: 0, entrySz: 0, exitWeighted: 0, closeSz: 0, pnl: 0, fees: 0, openTime: time, closeTime: 0 };
+      }
+      pos.entryWeighted += px * sz;
+      pos.entrySz += sz;
+      netSz += sz;
+    } else if (isClose) {
+      if (!pos) {
+        pos = { side, entryWeighted: 0, entrySz: 0, exitWeighted: 0, closeSz: 0, pnl: 0, fees: 0, openTime: time, closeTime: 0 };
+      }
+      pos.exitWeighted += px * sz;
+      pos.closeSz += sz;
+      if (f.closedPnl != null) pos.pnl += Number(f.closedPnl);
+      if (f.fee != null) pos.fees += Number(f.fee);
+      pos.closeTime = time;
+      netSz = Math.max(0, netSz - sz);
+
+      if (netSz < 0.00001) {
+        positions.push(pos);
+        pos = null;
+        netSz = 0;
+      }
+    }
+  }
+
+  if (pos && (pos.closeSz > 0 || netSz > 0.00001)) {
+    pos.isLive = netSz > 0.00001;
+    positions.push(pos);
+  }
+
+  return positions;
+}
+
 export default function TradeLog() {
   const [trades, setTrades] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,87 +75,61 @@ export default function TradeLog() {
       const startMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
       const endMs = Date.now() + 60000;
 
-      const fillsRes = await fetch('https://api.hyperliquid.xyz/info', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ type: 'userFillsByTime', user: wallet, startTime: startMs, endTime: endMs }),
-      }).then(r => r.json());
-
-      const posRes = await fetch('https://api.hyperliquid.xyz/info', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ type: 'clearinghouseState', user: wallet }),
-      }).then(r => r.json());
-
-      console.log('[TradeLog] HL returned', (fillsRes || []).length, 'total fills for', wallet);
+      const [fillsRes, posRes] = await Promise.all([
+        fetch('https://api.hyperliquid.xyz/info', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ type: 'userFillsByTime', user: wallet, startTime: startMs, endTime: endMs }),
+        }).then(r => r.json()),
+        fetch('https://api.hyperliquid.xyz/info', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ type: 'clearinghouseState', user: wallet }),
+        }).then(r => r.json()),
+      ]);
 
       const coinFills = (fillsRes || []).filter(f =>
         String(f.coin || '').includes(coin)
       );
 
-      console.log('[TradeLog]', coinFills.length, 'fills for', coin, '— close fills:',
-        coinFills.filter(f => String(f.dir || '').toLowerCase().includes('close')).length);
+      const hlPositions = buildPositions(coinFills);
 
-      const closeFills = coinFills
-        .filter(f => String(f.dir || '').toLowerCase().includes('close'))
-        .sort((a, b) => Number(a.time) - Number(b.time));
-
-      // Group sub-fills into single trades by order ID, or by time+direction
-      const grouped = [];
-      for (const f of closeFills) {
-        const dir = String(f.dir || '').toLowerCase();
-        const side = dir.includes('long') ? 'long' : 'short';
-        const px = Number(f.px || 0);
-        const sz = Number(f.sz || 0);
-        const pnl = Number(f.closedPnl || 0);
-        const fee = Number(f.fee || 0);
-        const time = Number(f.time || 0);
-        const oid = f.oid ?? f.tid ?? null;
-
-        const last = grouped[grouped.length - 1];
-        const sameOrder = last && last.side === side && (
-          (oid && last.oid === oid) ||
-          Math.abs(time - last.time) < 10000
-        );
-
-        if (sameOrder) {
-          last.weightedPx += px * sz;
-          last.sizeBtc += sz;
-          last.pnlUsd += (pnl - fee);
-          last.time = Math.max(last.time, time);
-        } else {
-          grouped.push({ side, weightedPx: px * sz, sizeBtc: sz, pnlUsd: pnl - fee, time, oid, isLive: false });
-        }
-      }
-
-      const rows = grouped.map(g => ({
-        side: g.side,
-        exitPx: g.sizeBtc > 0 ? Math.round(g.weightedPx / g.sizeBtc) : 0,
-        sizeBtc: g.sizeBtc,
-        pnlUsd: g.pnlUsd,
-        ts: new Date(g.time).toISOString(),
-        isLive: false,
+      const rows = hlPositions.map(p => ({
+        side: p.side,
+        entryPx: p.entrySz > 0 ? Math.round(p.entryWeighted / p.entrySz) : 0,
+        exitPx: p.closeSz > 0 ? Math.round(p.exitWeighted / p.closeSz) : null,
+        sizeBtc: p.entrySz,
+        pnlUsd: p.pnl - p.fees,
+        ts: p.closeTime ? new Date(p.closeTime).toISOString() : new Date(p.openTime).toISOString(),
+        isLive: !!p.isLive,
       })).reverse();
 
-      const positions = posRes?.assetPositions || [];
-      for (const p of positions) {
-        const pos = p?.position || p;
-        if (String(pos.coin || '').includes(coin) && Math.abs(Number(pos.szi || 0)) > 0) {
-          const side = Number(pos.szi) > 0 ? 'long' : 'short';
-          rows.unshift({
-            side,
-            entryPx: Number(pos.entryPx || 0),
-            exitPx: null,
-            sizeBtc: Math.abs(Number(pos.szi)),
-            pnlUsd: Number(pos.unrealizedPnl || 0),
-            ts: new Date().toISOString(),
-            isLive: true,
-          });
+      // Override live position data from HL clearinghouse (authoritative)
+      const hlAssets = posRes?.assetPositions || [];
+      for (const a of hlAssets) {
+        const ap = a?.position || a;
+        if (String(ap.coin || '').includes(coin) && Math.abs(Number(ap.szi || 0)) > 0) {
+          const liveSide = Number(ap.szi) > 0 ? 'long' : 'short';
+          const liveRow = rows.find(r => r.isLive);
+          if (liveRow) {
+            liveRow.entryPx = Number(ap.entryPx || liveRow.entryPx);
+            liveRow.sizeBtc = Math.abs(Number(ap.szi));
+            liveRow.pnlUsd = Number(ap.unrealizedPnl || 0);
+          } else {
+            rows.unshift({
+              side: liveSide,
+              entryPx: Number(ap.entryPx || 0),
+              exitPx: null,
+              sizeBtc: Math.abs(Number(ap.szi)),
+              pnlUsd: Number(ap.unrealizedPnl || 0),
+              ts: new Date().toISOString(),
+              isLive: true,
+            });
+          }
           break;
         }
       }
 
-      console.log('[TradeLog] Displaying', rows.length, 'rows');
       setTrades(rows);
     } catch (err) {
       console.error('[TradeLog] Failed to load from HL:', err);
@@ -154,19 +182,19 @@ export default function TradeLog() {
                 <th>Status</th>
                 <th>Side</th>
                 <th>Size (BTC)</th>
-                <th>Price</th>
+                <th>Entry</th>
+                <th>Exit</th>
                 <th>PnL</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={6} className="text-muted" style={{ textAlign: 'center', padding: 20 }}>Loading...</td></tr>
+                <tr><td colSpan={7} className="text-muted" style={{ textAlign: 'center', padding: 20 }}>Loading...</td></tr>
               ) : trades.length === 0 ? (
-                <tr><td colSpan={6} className="text-muted" style={{ textAlign: 'center', padding: 20 }}>No trades yet. Start the bot to begin trading.</td></tr>
+                <tr><td colSpan={7} className="text-muted" style={{ textAlign: 'center', padding: 20 }}>No trades yet. Start the bot to begin trading.</td></tr>
               ) : (
                 trades.map((t, i) => {
                   const pnl = Number(t.pnlUsd) || 0;
-                  const price = t.isLive ? t.entryPx : t.exitPx;
                   return (
                     <tr key={i}>
                       <td className="text-muted" style={{ fontSize: 12 }}>{t.ts ? new Date(t.ts).toLocaleString() : '--'}</td>
@@ -188,9 +216,10 @@ export default function TradeLog() {
                           }}>{pnl >= 0 ? 'Win' : 'Loss'}</span>
                         )}
                       </td>
-                      <td><span className={t.side === 'long' ? 'text-green' : 'text-red'}>{t.isLive ? t.side?.toUpperCase() : `Close ${t.side}`}</span></td>
+                      <td><span className={t.side === 'long' ? 'text-green' : 'text-red'}>{t.side?.toUpperCase()}</span></td>
                       <td className="mono">{t.sizeBtc?.toFixed(5) || '--'}</td>
-                      <td className="mono">{price ? `$${Number(price).toLocaleString()}` : '--'}</td>
+                      <td className="mono">{t.entryPx ? `$${Number(t.entryPx).toLocaleString()}` : '--'}</td>
+                      <td className="mono">{t.exitPx ? `$${Number(t.exitPx).toLocaleString()}` : t.isLive ? <span className="text-muted">—</span> : '--'}</td>
                       <td className={`mono ${t.isLive ? '' : pnl >= 0 ? 'text-green' : 'text-red'}`}>
                         {t.isLive
                           ? <span className="text-muted">—</span>
