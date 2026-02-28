@@ -39,45 +39,73 @@ async function fetchOpenPosition(wallet, coin) {
 function buildTradesFromFills(fills) {
   const sorted = [...fills].sort((a, b) => Number(a.time) - Number(b.time));
   const trades = [];
-  let currentTrade = null;
+  let avgEntryPx = 0;
+  let positionSz = 0;
+  let positionSide = null;
 
   for (const f of sorted) {
     const dir = String(f.dir || '').toLowerCase();
     const isOpen = dir.includes('open');
     const isClose = dir.includes('close');
+    const side = dir.includes('long') ? 'long' : 'short';
     const px = Number(f.px || 0);
     const sz = Number(f.sz || 0);
     const time = Number(f.time || 0);
 
     if (isOpen) {
-      const side = dir.includes('long') ? 'long' : 'short';
-      if (!currentTrade || currentTrade.side !== side) {
-        if (currentTrade && currentTrade.closeSz > 0) trades.push(currentTrade);
-        currentTrade = { side, entryPx: 0, entrySz: 0, exitPx: 0, closeSz: 0, pnlUsd: 0, fees: 0, openTime: time, closeTime: 0, weightedEntry: 0 };
+      if (positionSide && positionSide !== side) {
+        positionSz = 0;
+        avgEntryPx = 0;
       }
-      currentTrade.entrySz += sz;
-      currentTrade.weightedEntry += px * sz;
-      currentTrade.entryPx = currentTrade.weightedEntry / currentTrade.entrySz;
-      if (!currentTrade.openTime || time < currentTrade.openTime) currentTrade.openTime = time;
-    } else if (isClose && currentTrade) {
-      currentTrade.closeSz += sz;
-      currentTrade.exitPx = px;
-      if (f.closedPnl != null) currentTrade.pnlUsd += Number(f.closedPnl);
-      if (f.fee != null) currentTrade.fees += Number(f.fee);
-      if (time > currentTrade.closeTime) currentTrade.closeTime = time;
+      positionSide = side;
+      avgEntryPx = (avgEntryPx * positionSz + px * sz) / (positionSz + sz);
+      positionSz += sz;
+    } else if (isClose) {
+      const closedPnl = f.closedPnl != null ? Number(f.closedPnl) : 0;
+      const fee = f.fee != null ? Number(f.fee) : 0;
 
-      // Position fully closed when close size >= open size
-      if (currentTrade.closeSz >= currentTrade.entrySz - 0.00001) {
-        trades.push(currentTrade);
-        currentTrade = null;
+      // Merge sub-fills from the same order (happen within ~2s, same direction)
+      const last = trades[trades.length - 1];
+      const sameEvent = last && !last.isLive && last.side === side
+        && Math.abs(time - new Date(last.ts).getTime()) < 2000;
+
+      if (sameEvent) {
+        const prevSz = last.sizeBtc;
+        last.sizeBtc += sz;
+        last.exitPx = (last.exitPx * prevSz + px * sz) / last.sizeBtc;
+        last.pnlUsd += (closedPnl - fee);
+      } else {
+        trades.push({
+          side,
+          entryPx: avgEntryPx,
+          exitPx: px,
+          sizeBtc: sz,
+          pnlUsd: closedPnl - fee,
+          ts: new Date(time).toISOString(),
+          isLive: false,
+        });
+      }
+
+      positionSz = Math.max(0, positionSz - sz);
+      if (positionSz < 0.00001) {
+        positionSz = 0;
+        avgEntryPx = 0;
+        positionSide = null;
       }
     }
   }
 
-  // Remaining unclosed trade = still live
-  if (currentTrade && currentTrade.entrySz > 0 && currentTrade.closeSz < currentTrade.entrySz - 0.00001) {
-    currentTrade.isLive = true;
-    trades.push(currentTrade);
+  // Open position with no close = live
+  if (positionSz > 0.00001 && positionSide) {
+    trades.push({
+      side: positionSide,
+      entryPx: avgEntryPx,
+      exitPx: null,
+      sizeBtc: positionSz,
+      pnlUsd: 0,
+      ts: null,
+      isLive: true,
+    });
   }
 
   return trades;
@@ -110,39 +138,27 @@ export default function TradeLog() {
 
       const hlTrades = buildTradesFromFills(fills);
 
-      // If HL shows an open position, mark the last trade as live
+      // If HL shows an open position, update or add a live entry
       if (livePos && Math.abs(Number(livePos.szi || 0)) > 0) {
         const last = hlTrades[hlTrades.length - 1];
-        if (last && last.closeSz < last.entrySz - 0.00001) {
-          last.isLive = true;
+        if (last && last.isLive) {
           last.entryPx = Number(livePos.entryPx || last.entryPx);
-          last.entrySz = Math.abs(Number(livePos.szi));
+          last.sizeBtc = Math.abs(Number(livePos.szi));
         } else {
-          // HL has a position but no matching open fills in our window
           const side = Number(livePos.szi) > 0 ? 'long' : 'short';
           hlTrades.push({
             side,
             entryPx: Number(livePos.entryPx || 0),
-            entrySz: Math.abs(Number(livePos.szi)),
-            exitPx: 0, closeSz: 0, pnlUsd: 0, fees: 0,
-            openTime: Date.now(), closeTime: 0,
+            exitPx: null,
+            sizeBtc: Math.abs(Number(livePos.szi)),
+            pnlUsd: 0,
+            ts: new Date().toISOString(),
             isLive: true,
           });
         }
       }
 
-      // Map to display format, newest first
-      const display = hlTrades.map(t => ({
-        side: t.side,
-        entryPx: t.entryPx,
-        exitPx: t.exitPx || null,
-        sizeBtc: t.isLive ? t.entrySz : t.closeSz,
-        pnlUsd: t.pnlUsd - t.fees,
-        ts: t.isLive ? new Date(t.openTime).toISOString() : (t.closeTime ? new Date(t.closeTime).toISOString() : null),
-        isLive: !!t.isLive,
-      })).reverse();
-
-      setTrades(display);
+      setTrades(hlTrades.reverse());
     } catch {
       setTrades([]);
     }
