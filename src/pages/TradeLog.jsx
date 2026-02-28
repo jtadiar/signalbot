@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { readTradeLog, readConfig } from '../lib/config';
+import { readConfig } from '../lib/config';
 
 async function fetchUserFills(wallet, coin, startMs, endMs) {
   try {
@@ -9,13 +9,78 @@ async function fetchUserFills(wallet, coin, startMs, endMs) {
       body: JSON.stringify({ type: 'userFillsByTime', user: wallet, startTime: startMs, endTime: endMs }),
     });
     const fills = await res.json();
-    const perp = (fills || []).filter(f =>
+    return (fills || []).filter(f =>
       String(f.coin || '').includes(`${coin}-PERP`) || String(f.coin || '').includes(coin)
     );
-    return perp;
   } catch {
     return [];
   }
+}
+
+async function fetchOpenPosition(wallet, coin) {
+  try {
+    const res = await fetch('https://api.hyperliquid.xyz/info', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'clearinghouseState', user: wallet }),
+    });
+    const data = await res.json();
+    const positions = data?.assetPositions || [];
+    for (const p of positions) {
+      const pos = p?.position || p;
+      if (String(pos.coin || '').includes(coin) && Math.abs(Number(pos.szi || 0)) > 0) {
+        return pos;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+function buildTradesFromFills(fills) {
+  const sorted = [...fills].sort((a, b) => Number(a.time) - Number(b.time));
+  const trades = [];
+  let currentTrade = null;
+
+  for (const f of sorted) {
+    const dir = String(f.dir || '').toLowerCase();
+    const isOpen = dir.includes('open');
+    const isClose = dir.includes('close');
+    const px = Number(f.px || 0);
+    const sz = Number(f.sz || 0);
+    const time = Number(f.time || 0);
+
+    if (isOpen) {
+      const side = dir.includes('long') ? 'long' : 'short';
+      if (!currentTrade || currentTrade.side !== side) {
+        if (currentTrade && currentTrade.closeSz > 0) trades.push(currentTrade);
+        currentTrade = { side, entryPx: 0, entrySz: 0, exitPx: 0, closeSz: 0, pnlUsd: 0, fees: 0, openTime: time, closeTime: 0, weightedEntry: 0 };
+      }
+      currentTrade.entrySz += sz;
+      currentTrade.weightedEntry += px * sz;
+      currentTrade.entryPx = currentTrade.weightedEntry / currentTrade.entrySz;
+      if (!currentTrade.openTime || time < currentTrade.openTime) currentTrade.openTime = time;
+    } else if (isClose && currentTrade) {
+      currentTrade.closeSz += sz;
+      currentTrade.exitPx = px;
+      if (f.closedPnl != null) currentTrade.pnlUsd += Number(f.closedPnl);
+      if (f.fee != null) currentTrade.fees += Number(f.fee);
+      if (time > currentTrade.closeTime) currentTrade.closeTime = time;
+
+      // Position fully closed when close size >= open size
+      if (currentTrade.closeSz >= currentTrade.entrySz - 0.00001) {
+        trades.push(currentTrade);
+        currentTrade = null;
+      }
+    }
+  }
+
+  // Remaining unclosed trade = still live
+  if (currentTrade && currentTrade.entrySz > 0 && currentTrade.closeSz < currentTrade.entrySz - 0.00001) {
+    currentTrade.isLive = true;
+    trades.push(currentTrade);
+  }
+
+  return trades;
 }
 
 export default function TradeLog() {
@@ -24,106 +89,60 @@ export default function TradeLog() {
 
   useEffect(() => {
     loadTrades();
-    const interval = setInterval(loadTrades, 10000);
+    const interval = setInterval(loadTrades, 15000);
     return () => clearInterval(interval);
   }, []);
 
   async function loadTrades() {
     try {
-      const [raw, cfg] = await Promise.all([readTradeLog(), readConfig()]);
+      const cfg = await readConfig();
       const wallet = cfg?.wallet?.address;
       const coin = cfg?.market?.coin || 'BTC';
-      const closeEntries = raw.filter(t => t.action === 'CLOSE');
-      const openEntries = raw.filter(t => t.action === 'OPEN');
+      if (!wallet) { setTrades([]); setLoading(false); return; }
 
-      // Group CLOSE events by position (side + entryPx): a position can have multiple partial closes (TP1, TP2, runner)
-      const closeGroups = {};
-      for (const c of closeEntries) {
-        const key = `${c.side}:${Math.round(Number(c.entryPx))}`;
-        if (!closeGroups[key]) {
-          closeGroups[key] = { side: c.side, entryPx: c.entryPx, sizeBtc: 0, exitPx: c.exitPx, pnlUsd: 0, ts: c.ts };
-        }
-        const g = closeGroups[key];
-        g.sizeBtc = (Number(g.sizeBtc) || 0) + (Number(c.sizeBtc) || 0);
-        g.pnlUsd = (Number(g.pnlUsd) || 0) + (Number(c.pnlUsd) || 0);
-        g.exitPx = c.exitPx;
-        if (c.ts && (!g.ts || new Date(c.ts) > new Date(g.ts))) g.ts = c.ts;
-      }
-      let uniqueCloses = Object.values(closeGroups);
+      // Fetch last 30 days of fills from HL — single source of truth
+      const startMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      const endMs = Date.now() + 60000;
+      const [fills, livePos] = await Promise.all([
+        fetchUserFills(wallet, coin, startMs, endMs),
+        fetchOpenPosition(wallet, coin),
+      ]);
 
-      // Enrich with HL fill history for past trades (native TP triggers don't write TP1/TP2 to trades.jsonl)
-      if (wallet && openEntries.length > 0) {
-        const oldestTs = Math.min(...openEntries.map(o => new Date(o.ts || 0).getTime()));
-        const startMs = Math.max(0, oldestTs - 24 * 60 * 60 * 1000);
-        const endMs = Date.now() + 60000;
-        const fills = await fetchUserFills(wallet, coin, startMs, endMs);
-        const closeFills = (fills || []).filter(f => String(f.dir || '').toLowerCase().includes('close'));
-        const opensChronological = [...openEntries].sort((a, b) => new Date(a.ts) - new Date(b.ts));
+      const hlTrades = buildTradesFromFills(fills);
 
-        for (let i = 0; i < opensChronological.length; i++) {
-          const o = opensChronological[i];
-          const oTime = new Date(o.ts || 0).getTime();
-          const nextOTime = i + 1 < opensChronological.length
-            ? new Date(opensChronological[i + 1].ts || 0).getTime()
-            : endMs;
-          const side = (o.side || '').toLowerCase();
-          const posCloses = closeFills.filter(f => {
-            const t = Number(f.time || 0);
-            if (t <= oTime || t > nextOTime) return false;
-            const d = String(f.dir || '').toLowerCase();
-            return (side === 'short' && d.includes('short')) || (side === 'long' && d.includes('long'));
+      // If HL shows an open position, mark the last trade as live
+      if (livePos && Math.abs(Number(livePos.szi || 0)) > 0) {
+        const last = hlTrades[hlTrades.length - 1];
+        if (last && last.closeSz < last.entrySz - 0.00001) {
+          last.isLive = true;
+          last.entryPx = Number(livePos.entryPx || last.entryPx);
+          last.entrySz = Math.abs(Number(livePos.szi));
+        } else {
+          // HL has a position but no matching open fills in our window
+          const side = Number(livePos.szi) > 0 ? 'long' : 'short';
+          hlTrades.push({
+            side,
+            entryPx: Number(livePos.entryPx || 0),
+            entrySz: Math.abs(Number(livePos.szi)),
+            exitPx: 0, closeSz: 0, pnlUsd: 0, fees: 0,
+            openTime: Date.now(), closeTime: 0,
+            isLive: true,
           });
-
-          if (posCloses.length > 0) {
-            const totalPnl = posCloses.reduce((s, f) => {
-              const cp = f.closedPnl != null ? Number(f.closedPnl) : 0;
-              const fee = f.fee != null ? Number(f.fee) : 0;
-              return s + (cp - fee);
-            }, 0);
-            const totalSz = posCloses.reduce((s, f) => s + Number(f.sz || 0), 0);
-            const lastFill = posCloses.sort((a, b) => Number(b.time) - Number(a.time))[0];
-            const exitPx = Number(lastFill?.px || 0);
-            const closeTs = lastFill ? new Date(Number(lastFill.time)).toISOString() : null;
-
-            const key = `${o.side}:${Math.round(Number(o.entryPx))}`;
-            const existing = closeGroups[key];
-            if (existing) {
-              existing.pnlUsd = totalPnl;
-              existing.sizeBtc = totalSz;
-              if (exitPx > 0) existing.exitPx = exitPx;
-              if (closeTs) existing.ts = closeTs;
-            } else {
-              closeGroups[key] = {
-                side: o.side,
-                entryPx: o.entryPx,
-                sizeBtc: totalSz,
-                exitPx: exitPx || null,
-                pnlUsd: totalPnl,
-                ts: closeTs,
-              };
-            }
-          }
         }
-        uniqueCloses = Object.values(closeGroups);
       }
 
-      // Only the MOST RECENT open (by timestamp) with no matching close can be "Live".
-      const sortedOpens = [...openEntries].sort((a, b) => new Date(b.ts) - new Date(a.ts));
-      const liveOpens = [];
-      if (sortedOpens.length > 0) {
-        const newest = sortedOpens[0];
-        const hasClose = uniqueCloses.some(c =>
-          c.side === newest.side && Math.abs(Number(c.entryPx) - Number(newest.entryPx)) < 1
-        );
-        if (!hasClose) liveOpens.push(newest);
-      }
+      // Map to display format, newest first
+      const display = hlTrades.map(t => ({
+        side: t.side,
+        entryPx: t.entryPx,
+        exitPx: t.exitPx || null,
+        sizeBtc: t.isLive ? t.entrySz : t.closeSz,
+        pnlUsd: t.pnlUsd - t.fees,
+        ts: t.isLive ? new Date(t.openTime).toISOString() : (t.closeTime ? new Date(t.closeTime).toISOString() : null),
+        isLive: !!t.isLive,
+      })).reverse();
 
-      const all = [
-        ...liveOpens.map(o => ({ ...o, isLive: true })),
-        ...uniqueCloses.map(c => ({ ...c, isLive: false })),
-      ];
-      all.sort((a, b) => new Date(b.ts) - new Date(a.ts));
-      setTrades(all);
+      setTrades(display);
     } catch {
       setTrades([]);
     }
