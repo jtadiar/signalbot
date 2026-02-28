@@ -76,7 +76,7 @@ export default function TradeLog() {
 
       const rows = grouped.map(g => ({
         side: g.side,
-        exitPx: g.sizeBtc > 0 ? g.weightedPx / g.sizeBtc : 0,
+        exitPx: g.sizeBtc > 0 ? Math.round(g.weightedPx / g.sizeBtc) : 0,
         sizeBtc: g.sizeBtc,
         pnlUsd: g.pnlUsd,
         ts: new Date(g.time).toISOString(),
