@@ -135,7 +135,7 @@ export default function TradeLog() {
         entryPx: p.entrySz > 0 ? Math.round(p.entryWeighted / p.entrySz) : 0,
         exitPx: p.closeSz > 0 ? Math.round(p.exitWeighted / p.closeSz) : null,
         sizeBtc: p.entrySz || p.closeSz,
-        pnlUsd: p.pnl,
+        pnlUsd: p.pnl - p.fees,
         ts: p.closeTime ? new Date(p.closeTime).toISOString() : new Date(p.openTime).toISOString(),
         isLive: !!p.isLive,
       })).reverse();
