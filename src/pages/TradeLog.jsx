@@ -21,45 +21,68 @@ export default function TradeLog() {
       const startMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
       const endMs = Date.now() + 60000;
 
-      // Fetch fills and position from HL in parallel
-      const [fillsRes, posRes] = await Promise.all([
-        fetch('https://api.hyperliquid.xyz/info', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ type: 'userFillsByTime', user: wallet, startTime: startMs, endTime: endMs }),
-        }).then(r => r.json()).catch(() => []),
-        fetch('https://api.hyperliquid.xyz/info', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ type: 'clearinghouseState', user: wallet }),
-        }).then(r => r.json()).catch(() => null),
-      ]);
+      const fillsRes = await fetch('https://api.hyperliquid.xyz/info', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: 'userFillsByTime', user: wallet, startTime: startMs, endTime: endMs }),
+      }).then(r => r.json());
+
+      const posRes = await fetch('https://api.hyperliquid.xyz/info', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: 'clearinghouseState', user: wallet }),
+      }).then(r => r.json());
+
+      console.log('[TradeLog] HL returned', (fillsRes || []).length, 'total fills for', wallet);
 
       const coinFills = (fillsRes || []).filter(f =>
         String(f.coin || '').includes(coin)
       );
 
-      // Close fills → trade rows (each close fill = one row, exactly like HL)
+      console.log('[TradeLog]', coinFills.length, 'fills for', coin, '— close fills:',
+        coinFills.filter(f => String(f.dir || '').toLowerCase().includes('close')).length);
+
       const closeFills = coinFills
         .filter(f => String(f.dir || '').toLowerCase().includes('close'))
-        .sort((a, b) => Number(b.time) - Number(a.time));
+        .sort((a, b) => Number(a.time) - Number(b.time));
 
-      const rows = closeFills.map(f => {
+      // Group sub-fills into single trades by order ID, or by time+direction
+      const grouped = [];
+      for (const f of closeFills) {
         const dir = String(f.dir || '').toLowerCase();
         const side = dir.includes('long') ? 'long' : 'short';
+        const px = Number(f.px || 0);
+        const sz = Number(f.sz || 0);
         const pnl = Number(f.closedPnl || 0);
         const fee = Number(f.fee || 0);
-        return {
-          side,
-          exitPx: Number(f.px || 0),
-          sizeBtc: Number(f.sz || 0),
-          pnlUsd: pnl - fee,
-          ts: new Date(Number(f.time)).toISOString(),
-          isLive: false,
-        };
-      });
+        const time = Number(f.time || 0);
+        const oid = f.oid ?? f.tid ?? null;
 
-      // Check for live position
+        const last = grouped[grouped.length - 1];
+        const sameOrder = last && last.side === side && (
+          (oid && last.oid === oid) ||
+          Math.abs(time - last.time) < 10000
+        );
+
+        if (sameOrder) {
+          last.weightedPx += px * sz;
+          last.sizeBtc += sz;
+          last.pnlUsd += (pnl - fee);
+          last.time = Math.max(last.time, time);
+        } else {
+          grouped.push({ side, weightedPx: px * sz, sizeBtc: sz, pnlUsd: pnl - fee, time, oid, isLive: false });
+        }
+      }
+
+      const rows = grouped.map(g => ({
+        side: g.side,
+        exitPx: g.sizeBtc > 0 ? g.weightedPx / g.sizeBtc : 0,
+        sizeBtc: g.sizeBtc,
+        pnlUsd: g.pnlUsd,
+        ts: new Date(g.time).toISOString(),
+        isLive: false,
+      })).reverse();
+
       const positions = posRes?.assetPositions || [];
       for (const p of positions) {
         const pos = p?.position || p;
@@ -78,8 +101,10 @@ export default function TradeLog() {
         }
       }
 
+      console.log('[TradeLog] Displaying', rows.length, 'rows');
       setTrades(rows);
-    } catch {
+    } catch (err) {
+      console.error('[TradeLog] Failed to load from HL:', err);
       setTrades([]);
     }
     setLoading(false);
