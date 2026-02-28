@@ -1,13 +1,49 @@
 import { useState, useEffect } from 'react';
 import { readConfig } from '../lib/config';
 
-function buildPositions(fills) {
+function mergeSubFills(fills) {
   const sorted = [...fills].sort((a, b) => Number(a.time) - Number(b.time));
+  const merged = [];
+  for (const f of sorted) {
+    const dir = String(f.dir || '').toLowerCase();
+    const side = dir.includes('long') ? 'long' : 'short';
+    const isOpen = dir.includes('open');
+    const time = Number(f.time || 0);
+    const oid = f.oid ?? null;
+    const last = merged[merged.length - 1];
+    const same = last && last._isOpen === isOpen && last._side === side && (
+      (oid && last._oid === oid) || Math.abs(time - last.time) < 5000
+    );
+    if (same) {
+      const sz = Number(f.sz || 0);
+      last.sz += sz;
+      last._wpx += Number(f.px || 0) * sz;
+      last.px = last._wpx / last.sz;
+      if (f.closedPnl != null) last.closedPnl = (last.closedPnl || 0) + Number(f.closedPnl);
+      if (f.fee != null) last.fee = (last.fee || 0) + Number(f.fee);
+      last.time = Math.max(last.time, time);
+    } else {
+      const sz = Number(f.sz || 0);
+      const px = Number(f.px || 0);
+      merged.push({
+        ...f,
+        sz, px, time,
+        closedPnl: f.closedPnl != null ? Number(f.closedPnl) : null,
+        fee: f.fee != null ? Number(f.fee) : null,
+        _wpx: px * sz, _isOpen: isOpen, _side: side, _oid: oid,
+      });
+    }
+  }
+  return merged;
+}
+
+function buildPositions(fills) {
+  const merged = mergeSubFills(fills);
   const positions = [];
   let pos = null;
   let netSz = 0;
 
-  for (const f of sorted) {
+  for (const f of merged) {
     const dir = String(f.dir || '').toLowerCase();
     const isOpen = dir.includes('open');
     const isClose = dir.includes('close');
@@ -98,8 +134,8 @@ export default function TradeLog() {
         side: p.side,
         entryPx: p.entrySz > 0 ? Math.round(p.entryWeighted / p.entrySz) : 0,
         exitPx: p.closeSz > 0 ? Math.round(p.exitWeighted / p.closeSz) : null,
-        sizeBtc: p.entrySz,
-        pnlUsd: p.pnl - p.fees,
+        sizeBtc: p.entrySz || p.closeSz,
+        pnlUsd: p.pnl,
         ts: p.closeTime ? new Date(p.closeTime).toISOString() : new Date(p.openTime).toISOString(),
         isLive: !!p.isLive,
       })).reverse();
