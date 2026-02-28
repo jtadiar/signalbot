@@ -235,22 +235,22 @@ export default function Settings() {
             {[
               { label: 'Conservative', color: '#22c55e', preset: {
                 risk: { maxLeverage: 3, riskPerTradePct: 0.01, marginUsePct: 0.5, reentryCooldownSeconds: 900, lossCooldownMinutes: 60 },
-                signal: { confirmCandles: 2, trendMode: 'withTrendOnly', entryOnCandleClose: true, blockShortIfGreenCandle: true, stochFilter: { enabled: true, overbought: 80, oversold: 20 } },
+                signal: { emaTrendPeriod: 100, emaTriggerPeriod: 30, atrPeriod: 14, atrMult: 2, confirmCandles: 2, trendMode: 'withTrendOnly', entryOnCandleClose: true, blockShortIfGreenCandle: true, stochFilter: { enabled: true, overbought: 80, oversold: 20 } },
                 exits: { tp: [{ pct: 0.015, closeFrac: 0.25 }, { pct: 0.025, closeFrac: 0.25 }] },
               }},
               { label: 'Balanced', color: '#eab308', preset: {
                 risk: { maxLeverage: 8, riskPerTradePct: 0.02, marginUsePct: 0.75, reentryCooldownSeconds: 300, lossCooldownMinutes: 15 },
-                signal: { confirmCandles: 2, trendMode: 'disableCountertrendShorts', entryOnCandleClose: true, blockShortIfGreenCandle: true, stochFilter: { enabled: true, overbought: 80, oversold: 20 } },
+                signal: { emaTrendPeriod: 50, emaTriggerPeriod: 20, atrPeriod: 14, atrMult: 1.5, confirmCandles: 2, trendMode: 'disableCountertrendShorts', entryOnCandleClose: true, blockShortIfGreenCandle: true, stochFilter: { enabled: true, overbought: 80, oversold: 20 } },
                 exits: { tp: [{ pct: 0.02, closeFrac: 0.25 }, { pct: 0.03, closeFrac: 0.25 }] },
               }},
               { label: 'Aggressive', color: '#f97316', preset: {
                 risk: { maxLeverage: 15, riskPerTradePct: 0.03, marginUsePct: 1, reentryCooldownSeconds: 120, lossCooldownMinutes: 10 },
-                signal: { confirmCandles: 1, trendMode: 'both', entryOnCandleClose: true, blockShortIfGreenCandle: true, stochFilter: { enabled: true, overbought: 80, oversold: 20 } },
+                signal: { emaTrendPeriod: 40, emaTriggerPeriod: 15, atrPeriod: 10, atrMult: 1.2, confirmCandles: 1, trendMode: 'both', entryOnCandleClose: true, blockShortIfGreenCandle: true, stochFilter: { enabled: true, overbought: 80, oversold: 20 } },
                 exits: { tp: [{ pct: 0.02, closeFrac: 0.25 }, { pct: 0.03, closeFrac: 0.25 }] },
               }},
               { label: 'Degen', color: '#ef4444', preset: {
                 risk: { maxLeverage: 30, riskPerTradePct: 0.05, marginUsePct: 1, reentryCooldownSeconds: 30, lossCooldownMinutes: 5 },
-                signal: { confirmCandles: 1, trendMode: 'both', entryOnCandleClose: false, blockShortIfGreenCandle: false, stochFilter: { enabled: false, overbought: 80, oversold: 20 } },
+                signal: { emaTrendPeriod: 30, emaTriggerPeriod: 10, atrPeriod: 7, atrMult: 1, confirmCandles: 1, trendMode: 'both', entryOnCandleClose: false, blockShortIfGreenCandle: false, stochFilter: { enabled: false, overbought: 80, oversold: 20 } },
                 exits: { tp: [{ pct: 0.03, closeFrac: 0.25 }, { pct: 0.05, closeFrac: 0.25 }] },
               }},
             ].map(({ label, color, preset }) => (
@@ -266,6 +266,10 @@ export default function Settings() {
                     next.risk.reentryCooldownSeconds = preset.risk.reentryCooldownSeconds;
                     next.risk.lossCooldownMinutes = preset.risk.lossCooldownMinutes;
                     if (!next.signal) next.signal = {};
+                    next.signal.emaTrendPeriod = preset.signal.emaTrendPeriod;
+                    next.signal.emaTriggerPeriod = preset.signal.emaTriggerPeriod;
+                    next.signal.atrPeriod = preset.signal.atrPeriod;
+                    next.signal.atrMult = preset.signal.atrMult;
                     next.signal.confirmCandles = preset.signal.confirmCandles;
                     next.signal.trendMode = preset.signal.trendMode;
                     next.signal.entryOnCandleClose = preset.signal.entryOnCandleClose;
