@@ -265,7 +265,7 @@ export default function Settings() {
           else { level = 3; label = 'High Risk'; sublabel = 'Maximum exposure, minimal filters'; color = '#ef4444'; }
 
           return (
-            <div style={{ marginBottom: 16, padding: 16, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg-card)' }}>
+            <div style={{ marginBottom: 16, padding: 16, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg-card)', opacity: config.setAndForget?.enabled ? 0.3 : 1, transition: 'opacity 0.2s' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontWeight: 600 }}>Risk Level</span>
                 <span style={{ fontSize: 14, fontWeight: 700, color, fontStyle: 'italic' }}>{label}</span>
