@@ -541,12 +541,23 @@ async function manageOpenPosition(pos){
   const px = await midPx();
   const absSz = Math.abs(pos.szi);
 
-  // Ensure state is initialized
+  // Sync state with HL position — HL is always source of truth
   if (!state.activeSide || !state.entryPx){
     state.activeSide = side;
     state.entryPx = pos.entryPx;
   }
   if (!state.initialSz) state.initialSz = absSz;
+
+  // Cross-check: if HL position doesn't match local state, resync
+  const hlEntry = Number(pos.entryPx || 0);
+  if (hlEntry > 0 && state.entryPx && Math.abs(hlEntry - state.entryPx) / hlEntry > 0.01) {
+    console.warn(nowIso(), `STATE RESYNC: entryPx mismatch — state=${state.entryPx} HL=${hlEntry}. Using HL.`);
+    state.entryPx = hlEntry;
+  }
+  if (state.activeSide !== side) {
+    console.warn(nowIso(), `STATE RESYNC: side mismatch — state=${state.activeSide} HL=${side}. Using HL.`);
+    state.activeSide = side;
+  }
 
   // ---- Exit plan (Price-based, R-multiple) ----
   // stopPct comes from the entry signal (ATR-sized) and is persisted in state.
@@ -1378,33 +1389,67 @@ async function mainLoop(){
 
   if (state.activeSide) {
     const closeSide = state.activeSide;
-    const closeEntry = state.entryPx;
-    const closeSz = state.initialSz || 0;
+    let closeEntry = state.entryPx;
+    let closeSz = state.initialSz || 0;
 
-    // Try to find exit price from recent fills
+    // Pull actual fill data from HL instead of relying on local state
     let exitPx = 0;
     let exitSz = closeSz;
+    let hlPnl = null;
+    let hlFee = null;
     try {
-      const since = Date.now() - 10 * 60 * 1000; // last 10 minutes
+      const since = Date.now() - 30 * 60 * 1000;
       const fills = await sdk.info.getUserFillsByTime(cfg.wallet.address, since, Date.now(), true);
-      const coinFills = (fills || []).filter(f => String(f.coin || '').includes(cfg.market.coin));
+      const coinFills = (fills || []).filter(f =>
+        String(f.coin || '').includes(cfg.market.coin) &&
+        String(f.dir || '').toLowerCase().includes('close')
+      );
       if (coinFills.length > 0) {
-        const last = coinFills[coinFills.length - 1];
-        exitPx = Number(last.px || 0);
-        exitSz = Number(last.sz || closeSz);
+        // Aggregate all recent close fills (HL can split into sub-fills)
+        let totalSz = 0, weightedPx = 0, totalPnl = 0, totalFee = 0;
+        for (const f of coinFills) {
+          const t = Number(f.time || 0);
+          if (t <= (state.lastFillTimeMs || 0)) continue;
+          const sz = Number(f.sz || 0);
+          const px = Number(f.px || 0);
+          totalSz += sz;
+          weightedPx += px * sz;
+          if (f.closedPnl !== undefined) totalPnl += Number(f.closedPnl);
+          if (f.fee !== undefined) totalFee += Number(f.fee);
+        }
+        if (totalSz > 0) {
+          exitPx = weightedPx / totalSz;
+          exitSz = totalSz;
+          hlPnl = totalPnl;
+          hlFee = totalFee;
+        } else {
+          // No new close fills — use last fill as fallback
+          const last = coinFills[coinFills.length - 1];
+          exitPx = Number(last.px || 0);
+          exitSz = Number(last.sz || closeSz);
+          if (last.closedPnl !== undefined) hlPnl = Number(last.closedPnl);
+        }
       }
     } catch {}
     if (!exitPx) { try { exitPx = await midPx(); } catch {} }
 
-    const pnlUsd = (closeEntry && exitPx)
+    // Prefer HL's reported P&L (includes fees, accurate) over local calculation
+    const localPnl = (closeEntry && exitPx)
       ? ((closeSide === 'short' ? (closeEntry - exitPx) : (exitPx - closeEntry)) * exitSz) : null;
+    const pnlUsd = hlPnl !== null ? hlPnl : localPnl;
+
+    // Cross-check: if local state size is wildly different from HL fill size, log a warning
+    if (closeSz > 0 && exitSz > 0 && Math.abs(closeSz - exitSz) / closeSz > 0.5) {
+      console.warn(nowIso(), `STATE MISMATCH: state.initialSz=${closeSz} but HL fill sz=${exitSz}. Using HL data.`);
+      closeSz = exitSz;
+    }
 
     try {
-      const ev = { ts: nowIso(), action: 'CLOSE', side: closeSide, sizeBtc: exitSz, entryPx: closeEntry, exitPx, pnlUsd, leader: 'signalbot', partial: false, reason: 'external_close' };
+      const ev = { ts: nowIso(), action: 'CLOSE', side: closeSide, sizeBtc: exitSz, entryPx: closeEntry, exitPx, pnlUsd, hlPnl, hlFee, leader: 'signalbot', partial: false, reason: 'external_close' };
       fs.appendFileSync(TRADE_LOG, JSON.stringify(ev) + "\n");
     } catch {}
 
-    console.log(nowIso(), `Position closed externally: ${closeSide} ${exitSz} @ ${exitPx || '?'}, PnL: ${pnlUsd?.toFixed(2) ?? '?'}`);
+    console.log(nowIso(), `Position closed externally: ${closeSide} ${exitSz} @ ${exitPx || '?'}, PnL: ${pnlUsd?.toFixed(2) ?? '?'}${hlPnl !== null ? ' (from HL)' : ' (estimated)'}`);
     await cancelAllBtcOrders().catch(() => {});
     state.lastExitAtMs = Date.now();
     state.activeSide = null;
