@@ -75,7 +75,7 @@ if (SAF_ENABLED) {
   cfg.exits.maxMarginLossPct = 0.15;
   cfg.exits.runnerExit = 'signal';
 
-  cfg.exits._setAndForgetTrail = { enabled: true, trailPct: 0.006, minUpdateSeconds: 15 };
+  cfg.exits._setAndForgetTrail = { enabled: true, trailPct: 0.006, minUpdateSeconds: 5 };
 
   console.log('SET & FORGET mode active — config overridden. Leverage:', lev, 'Margin:', (marginPct * 100) + '%', 'MaxDailyLoss:', maxLoss);
 }
