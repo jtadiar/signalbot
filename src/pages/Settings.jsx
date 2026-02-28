@@ -18,6 +18,7 @@ export default function Settings() {
   const [saved, setSaved] = useState(false);
   const [hasEdits, setHasEdits] = useState(false);
   const [error, setError] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Telegram state
   const [tgEnabled, setTgEnabled] = useState(false);
@@ -212,6 +213,22 @@ export default function Settings() {
 
       {/* Configure tab */}
       <div style={{ display: tab === 'configure' ? 'block' : 'none' }}>
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+          marginBottom: 12, padding: 12, borderRadius: 8,
+          background: hasEdits ? 'rgba(255, 107, 0, 0.06)' : 'transparent',
+          border: hasEdits ? '1px solid rgba(255, 107, 0, 0.15)' : '1px solid transparent',
+        }}>
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+            {saved ? 'Changes saved.' : hasEdits ? 'You have unsaved changes.' : ''}
+          </span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {saved && <span className="success-msg">Saved!</span>}
+            {error && <span className="error-msg">{error}</span>}
+            <button className="btn btn-primary" onClick={handleSaveConfig}>Save Changes</button>
+          </div>
+        </div>
+
         {/* Risk Meter */}
         {(() => {
           const leverage = Number(config.risk?.maxLeverage || 10);
@@ -268,22 +285,6 @@ export default function Settings() {
             </div>
           );
         })()}
-
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
-          marginBottom: 20, padding: 12, borderRadius: 8,
-          background: hasEdits ? 'rgba(255, 107, 0, 0.06)' : 'transparent',
-          border: hasEdits ? '1px solid rgba(255, 107, 0, 0.15)' : '1px solid transparent',
-        }}>
-          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            {saved ? 'Changes saved.' : hasEdits ? 'You have unsaved changes.' : ''}
-          </span>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {saved && <span className="success-msg">Saved!</span>}
-            {error && <span className="error-msg">{error}</span>}
-            <button className="btn btn-primary" onClick={handleSaveConfig}>Save Changes</button>
-          </div>
-        </div>
 
         {/* Set & Forget Mode */}
         <div style={{
@@ -451,91 +452,100 @@ export default function Settings() {
             </div>
 
             <div style={{ borderTop: '1px solid var(--border)', marginTop: 12, paddingTop: 12 }}>
-              <label className="form-label" style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: 12 }}>Signal Filters</label>
+              <button
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+                  background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: showAdvanced ? 12 : 0,
+                }}
+              >
+                <span style={{ fontSize: 10, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: showAdvanced ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+                <span style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontWeight: 600 }}>Advanced — Filters & Entry Guards</span>
+              </button>
 
-              <div className="form-group">
-                <label className="form-label">Max EMA distance % <Tip text="Skip signals when price is too far from the 1h EMA. Prevents entering late in extended moves that are likely to reverse. 0 = disabled. 2 = reject if price is >2% from EMA." /></label>
-                <input className="form-input" type="number" step="0.5" min="0" max="10" value={Math.round((config.signal?.maxEmaDistPct ?? 0.02) * 10000) / 100} onChange={e => update('signal.maxEmaDistPct', Number(e.target.value) / 100)} />
-                <div className="form-hint">{(config.signal?.maxEmaDistPct ?? 0.02) > 0 ? `Skip if price is >${((config.signal?.maxEmaDistPct ?? 0.02) * 100).toFixed(1)}% from 1h EMA` : 'Disabled (0)'}</div>
-              </div>
+              {showAdvanced && (
+                <div>
+                  <div className="form-group">
+                    <label className="form-label">Max EMA distance % <Tip text="Skip signals when price is too far from the 1h EMA. Prevents entering late in extended moves that are likely to reverse. 0 = disabled. 2 = reject if price is >2% from EMA." /></label>
+                    <input className="form-input" type="number" step="0.5" min="0" max="10" value={Math.round((config.signal?.maxEmaDistPct ?? 0.02) * 10000) / 100} onChange={e => update('signal.maxEmaDistPct', Number(e.target.value) / 100)} />
+                    <div className="form-hint">{(config.signal?.maxEmaDistPct ?? 0.02) > 0 ? `Skip if price is >${((config.signal?.maxEmaDistPct ?? 0.02) * 100).toFixed(1)}% from 1h EMA` : 'Disabled (0)'}</div>
+                  </div>
 
-              <div className="form-group">
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={config.signal?.stochFilter?.enabled !== false}
-                    onChange={e => {
-                      const sf = config.signal?.stochFilter || {};
-                      update('signal.stochFilter', { overbought: sf.overbought ?? 80, oversold: sf.oversold ?? 20, enabled: e.target.checked });
-                    }}
-                  />
-                  <span>Stochastic RSI filter <Tip text="Filters out entries when momentum is exhausted. Skips shorts when Stoch RSI is oversold (bounce likely) and longs when overbought (pullback likely)." /></span>
-                </label>
-                <div className="grid-2">
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: 11 }}>Overbought level</label>
-                    <input className="form-input" type="number" min="50" max="100" value={config.signal?.stochFilter?.overbought ?? 80} onChange={e => {
-                      const sf = config.signal?.stochFilter || {};
-                      update('signal.stochFilter', { enabled: sf.enabled !== false, oversold: sf.oversold ?? 20, overbought: Number(e.target.value) });
-                    }} />
-                    <div className="form-hint">Skip longs above this (default 80)</div>
+                  <div className="form-group">
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 8 }}>
+                      <input
+                        type="checkbox"
+                        checked={config.signal?.stochFilter?.enabled !== false}
+                        onChange={e => {
+                          const sf = config.signal?.stochFilter || {};
+                          update('signal.stochFilter', { overbought: sf.overbought ?? 80, oversold: sf.oversold ?? 20, enabled: e.target.checked });
+                        }}
+                      />
+                      <span>Stochastic RSI filter <Tip text="Filters out entries when momentum is exhausted. Skips shorts when Stoch RSI is oversold (bounce likely) and longs when overbought (pullback likely)." /></span>
+                    </label>
+                    <div className="grid-2">
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label" style={{ fontSize: 11 }}>Overbought level</label>
+                        <input className="form-input" type="number" min="50" max="100" value={config.signal?.stochFilter?.overbought ?? 80} onChange={e => {
+                          const sf = config.signal?.stochFilter || {};
+                          update('signal.stochFilter', { enabled: sf.enabled !== false, oversold: sf.oversold ?? 20, overbought: Number(e.target.value) });
+                        }} />
+                        <div className="form-hint">Skip longs above this (default 80)</div>
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label" style={{ fontSize: 11 }}>Oversold level</label>
+                        <input className="form-input" type="number" min="0" max="50" value={config.signal?.stochFilter?.oversold ?? 20} onChange={e => {
+                          const sf = config.signal?.stochFilter || {};
+                          update('signal.stochFilter', { enabled: sf.enabled !== false, overbought: sf.overbought ?? 80, oversold: Number(e.target.value) });
+                        }} />
+                        <div className="form-hint">Skip shorts below this (default 20)</div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: 11 }}>Oversold level</label>
-                    <input className="form-input" type="number" min="0" max="50" value={config.signal?.stochFilter?.oversold ?? 20} onChange={e => {
-                      const sf = config.signal?.stochFilter || {};
-                      update('signal.stochFilter', { enabled: sf.enabled !== false, overbought: sf.overbought ?? 80, oversold: Number(e.target.value) });
-                    }} />
-                    <div className="form-hint">Skip shorts below this (default 20)</div>
+
+                  <div className="form-group">
+                    <label className="form-label">Confirm candles <Tip text="How many consecutive 15m candles must be on the wrong side of EMA20 before a reclaim counts. 1 = default (single candle). 2 = stricter (filters fakeouts but enters later)." /></label>
+                    <input className="form-input" type="number" min="1" max="3" value={config.signal?.confirmCandles ?? 1} onChange={e => update('signal.confirmCandles', Number(e.target.value))} />
+                    <div className="form-hint">{(config.signal?.confirmCandles ?? 1) >= 2 ? `Require ${config.signal.confirmCandles} candles on wrong side before reclaim` : 'Single candle reclaim (default)'}</div>
                   </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Trend mode <Tip text="Controls which trade directions are allowed based on the 1h EMA trend. 'Both' = current behavior. 'With trend only' = only longs in bullish, only shorts in bearish. 'Block countertrend shorts' = prevents shorting when trend is bullish (longs unaffected)." /></label>
+                    <select
+                      className="form-input"
+                      value={config.signal?.trendMode ?? 'both'}
+                      onChange={e => update('signal.trendMode', e.target.value)}
+                    >
+                      <option value="both">Both directions</option>
+                      <option value="withTrendOnly">With trend only</option>
+                      <option value="disableCountertrendShorts">Block countertrend shorts</option>
+                    </select>
+                    <div className="form-hint">
+                      {(config.signal?.trendMode ?? 'both') === 'both' ? 'Trades both directions regardless of trend' : (config.signal?.trendMode ?? '') === 'withTrendOnly' ? 'Only longs in bullish trend, only shorts in bearish' : 'Shorts blocked when trend is bullish — longs always allowed'}
+                    </div>
+                  </div>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={String(config.signal?.entryOnCandleClose ?? true).toLowerCase() !== 'false'}
+                      onChange={e => update('signal.entryOnCandleClose', e.target.checked)}
+                    />
+                    <span>Enter on candle close <Tip text="Only enter trades after the 15m candle closes. Prevents entries based on incomplete candle signals that may reverse before close. Recommended: on." /></span>
+                  </label>
+                  <div className="form-hint" style={{ marginLeft: 24, marginBottom: 12 }}>Wait for the 15m candle to close before acting on the signal.</div>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={String(config.signal?.blockShortIfGreenCandle ?? true).toLowerCase() !== 'false'}
+                      onChange={e => update('signal.blockShortIfGreenCandle', e.target.checked)}
+                    />
+                    <span>Block shorts if trigger candle is green <Tip text="Skip short entries if the 15m trigger candle closed green (close > open). Prevents shorting into bullish momentum candles." /></span>
+                  </label>
+                  <div className="form-hint" style={{ marginLeft: 24 }}>Avoid shorting when the last 15m candle closed higher than it opened.</div>
                 </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Confirm candles <Tip text="How many consecutive 15m candles must be on the wrong side of EMA20 before a reclaim counts. 1 = default (single candle). 2 = stricter (filters fakeouts but enters later)." /></label>
-                <input className="form-input" type="number" min="1" max="3" value={config.signal?.confirmCandles ?? 1} onChange={e => update('signal.confirmCandles', Number(e.target.value))} />
-                <div className="form-hint">{(config.signal?.confirmCandles ?? 1) >= 2 ? `Require ${config.signal.confirmCandles} candles on wrong side before reclaim` : 'Single candle reclaim (default)'}</div>
-              </div>
-
-              <div style={{ borderTop: '1px solid var(--border)', marginTop: 12, paddingTop: 12 }}>
-                <label className="form-label" style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: 12 }}>Entry Guards</label>
-
-                <div className="form-group">
-                  <label className="form-label">Trend mode <Tip text="Controls which trade directions are allowed based on the 1h EMA trend. 'Both' = current behavior. 'With trend only' = only longs in bullish, only shorts in bearish. 'Block countertrend shorts' = prevents shorting when trend is bullish (longs unaffected)." /></label>
-                  <select
-                    className="form-input"
-                    value={config.signal?.trendMode ?? 'both'}
-                    onChange={e => update('signal.trendMode', e.target.value)}
-                  >
-                    <option value="both">Both directions</option>
-                    <option value="withTrendOnly">With trend only</option>
-                    <option value="disableCountertrendShorts">Block countertrend shorts</option>
-                  </select>
-                  <div className="form-hint">
-                    {(config.signal?.trendMode ?? 'both') === 'both' ? 'Trades both directions regardless of trend' : (config.signal?.trendMode ?? '') === 'withTrendOnly' ? 'Only longs in bullish trend, only shorts in bearish' : 'Shorts blocked when trend is bullish — longs always allowed'}
-                  </div>
-                </div>
-
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={String(config.signal?.entryOnCandleClose ?? true).toLowerCase() !== 'false'}
-                    onChange={e => update('signal.entryOnCandleClose', e.target.checked)}
-                  />
-                  <span>Enter on candle close <Tip text="Only enter trades after the 15m candle closes. Prevents entries based on incomplete candle signals that may reverse before close. Recommended: on." /></span>
-                </label>
-                <div className="form-hint" style={{ marginLeft: 24, marginBottom: 12 }}>Wait for the 15m candle to close before acting on the signal.</div>
-
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={String(config.signal?.blockShortIfGreenCandle ?? true).toLowerCase() !== 'false'}
-                    onChange={e => update('signal.blockShortIfGreenCandle', e.target.checked)}
-                  />
-                  <span>Block shorts if trigger candle is green <Tip text="Skip short entries if the 15m trigger candle closed green (close > open). Prevents shorting into bullish momentum candles." /></span>
-                </label>
-                <div className="form-hint" style={{ marginLeft: 24 }}>Avoid shorting when the last 15m candle closed higher than it opened.</div>
-              </div>
+              )}
             </div>
           </div>
 
