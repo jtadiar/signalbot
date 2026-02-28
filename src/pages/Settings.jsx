@@ -228,6 +228,67 @@ export default function Settings() {
           </div>
         </div>
 
+        {/* Risk Meter */}
+        {(() => {
+          const leverage = Number(config.risk?.maxLeverage || 10);
+          const riskPct = Number(config.risk?.riskPerTradePct || 0.03) * 100;
+          const marginUse = Number(config.risk?.marginUsePct || 0.75) * 100;
+          const reentryCooldown = Number(config.risk?.reentryCooldownSeconds || 300);
+          const lossCooldown = Number(config.risk?.lossCooldownMinutes || 15);
+          const trendMode = String(config.signal?.trendMode ?? 'both').toLowerCase();
+          const candleClose = String(config.signal?.entryOnCandleClose ?? true).toLowerCase() !== 'false';
+          const blockGreen = String(config.signal?.blockShortIfGreenCandle ?? true).toLowerCase() !== 'false';
+          const stochEnabled = config.signal?.stochFilter?.enabled !== false;
+          const confirmCandles = Number(config.signal?.confirmCandles ?? 1);
+          const emaTrendBreak = String(config.exits?.emaTrendBreakExit?.enabled ?? false).toLowerCase() !== 'false';
+
+          let score = 0;
+          // Leverage: 1-3 = 0, 4-7 = 1, 8-12 = 2, 13+ = 3
+          if (leverage <= 3) score += 0; else if (leverage <= 7) score += 1; else if (leverage <= 12) score += 2; else score += 3;
+          // Risk per trade: 1% = 0, 2-3% = 1, 4-5% = 2, 6%+ = 3
+          if (riskPct <= 1) score += 0; else if (riskPct <= 3) score += 1; else if (riskPct <= 5) score += 2; else score += 3;
+          // Margin use: 25% = 0, 50% = 1, 75% = 2, 100% = 3
+          if (marginUse <= 30) score += 0; else if (marginUse <= 55) score += 1; else if (marginUse <= 80) score += 2; else score += 3;
+          // Cooldowns: long = safe, short = risky
+          if (reentryCooldown >= 600) score += 0; else if (reentryCooldown >= 300) score += 0.5; else score += 1;
+          if (lossCooldown >= 30) score += 0; else if (lossCooldown >= 15) score += 0.5; else score += 1;
+          // Filters off = riskier
+          if (trendMode === 'both') score += 1;
+          if (!candleClose) score += 1;
+          if (!blockGreen) score += 0.5;
+          if (!stochEnabled) score += 1;
+          if (confirmCandles < 2) score += 0.5;
+          if (!emaTrendBreak) score += 0.5;
+
+          // Max possible ~18, map to 4 levels
+          let level, label, sublabel, color;
+          if (score <= 5) { level = 0; label = 'Conservative'; sublabel = 'Fewer trades, tighter risk, capital preservation'; color = '#22c55e'; }
+          else if (score <= 9) { level = 1; label = 'Moderate'; sublabel = 'Balanced risk and reward'; color = '#eab308'; }
+          else if (score <= 13) { level = 2; label = 'Aggressive'; sublabel = 'Higher exposure, more frequent trades'; color = '#f97316'; }
+          else { level = 3; label = 'High Risk'; sublabel = 'Maximum exposure, minimal filters'; color = '#ef4444'; }
+
+          return (
+            <div style={{ marginBottom: 20, padding: 16, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg-card)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontWeight: 600 }}>Risk Level</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color, fontStyle: 'italic' }}>{label}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+                {[0, 1, 2, 3].map(i => (
+                  <div key={i} style={{
+                    flex: 1, height: 8, borderRadius: 4,
+                    background: i <= level
+                      ? (i === 0 ? '#22c55e' : i === 1 ? '#eab308' : i === 2 ? '#f97316' : '#ef4444')
+                      : 'var(--bg-input)',
+                    transition: 'background 0.3s',
+                  }} />
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{sublabel}</div>
+            </div>
+          );
+        })()}
+
         <div className="grid-2">
           <div className="card">
             <div className="card-title">Signal Parameters</div>
@@ -306,6 +367,46 @@ export default function Settings() {
                 <label className="form-label">Confirm candles <Tip text="How many consecutive 15m candles must be on the wrong side of EMA20 before a reclaim counts. 1 = default (single candle). 2 = stricter (filters fakeouts but enters later)." /></label>
                 <input className="form-input" type="number" min="1" max="3" value={config.signal?.confirmCandles ?? 1} onChange={e => update('signal.confirmCandles', Number(e.target.value))} />
                 <div className="form-hint">{(config.signal?.confirmCandles ?? 1) >= 2 ? `Require ${config.signal.confirmCandles} candles on wrong side before reclaim` : 'Single candle reclaim (default)'}</div>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--border)', marginTop: 12, paddingTop: 12 }}>
+                <label className="form-label" style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: 12 }}>Entry Guards</label>
+
+                <div className="form-group">
+                  <label className="form-label">Trend mode <Tip text="Controls which trade directions are allowed based on the 1h EMA trend. 'Both' = current behavior. 'With trend only' = only longs in bullish, only shorts in bearish. 'Block countertrend shorts' = prevents shorting when trend is bullish (longs unaffected)." /></label>
+                  <select
+                    className="form-input"
+                    value={config.signal?.trendMode ?? 'both'}
+                    onChange={e => update('signal.trendMode', e.target.value)}
+                  >
+                    <option value="both">Both directions</option>
+                    <option value="withTrendOnly">With trend only</option>
+                    <option value="disableCountertrendShorts">Block countertrend shorts</option>
+                  </select>
+                  <div className="form-hint">
+                    {(config.signal?.trendMode ?? 'both') === 'both' ? 'Trades both directions regardless of trend' : (config.signal?.trendMode ?? '') === 'withTrendOnly' ? 'Only longs in bullish trend, only shorts in bearish' : 'Shorts blocked when trend is bullish — longs always allowed'}
+                  </div>
+                </div>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={String(config.signal?.entryOnCandleClose ?? true).toLowerCase() !== 'false'}
+                    onChange={e => update('signal.entryOnCandleClose', e.target.checked)}
+                  />
+                  <span>Enter on candle close <Tip text="Only enter trades after the 15m candle closes. Prevents entries based on incomplete candle signals that may reverse before close. Recommended: on." /></span>
+                </label>
+                <div className="form-hint" style={{ marginLeft: 24, marginBottom: 12 }}>Wait for the 15m candle to close before acting on the signal.</div>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={String(config.signal?.blockShortIfGreenCandle ?? true).toLowerCase() !== 'false'}
+                    onChange={e => update('signal.blockShortIfGreenCandle', e.target.checked)}
+                  />
+                  <span>Block shorts if trigger candle is green <Tip text="Skip short entries if the 15m trigger candle closed green (close > open). Prevents shorting into bullish momentum candles." /></span>
+                </label>
+                <div className="form-hint" style={{ marginLeft: 24 }}>Avoid shorting when the last 15m candle closed higher than it opened.</div>
               </div>
             </div>
           </div>

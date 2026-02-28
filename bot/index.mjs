@@ -468,7 +468,8 @@ async function fetchOHLC(symbol, interval, lookback){
   const closes = (res||[]).map(c=>Number(c.c));
   const highs = (res||[]).map(c=>Number(c.h));
   const lows = (res||[]).map(c=>Number(c.l));
-  return { closes, highs, lows };
+  const opens = (res||[]).map(c=>Number(c.o));
+  return { closes, highs, lows, opens };
 }
 
 function computeRiskSizedNotional({ equityUsd, stopPct }){
@@ -1050,6 +1051,60 @@ async function tryEnter(){
   });
 
   if (!sig) return;
+
+  // ---- Filter: Trend Mode (direction guard) ----
+  const trendMode = String(cfg?.signal?.trendMode ?? 'both').toLowerCase();
+  if (trendMode !== 'both') {
+    const trendPeriod = Number(cfg?.signal?.emaTrendPeriod ?? 50);
+    const ema1hVal = ema(c1h.closes, trendPeriod);
+    if (ema1hVal !== null) {
+      const trendBullish = priceNow > ema1hVal;
+      const trendBearish = priceNow < ema1hVal;
+      if (trendMode === 'withtrendonly') {
+        if (sig.side === 'short' && trendBullish) {
+          console.log(nowIso(), `ENTRY_BLOCKED reason=COUNTERTREND_SHORT trend=bullish mode=withTrendOnly signal=short`);
+          tauriEmit({ type: 'log', message: 'Entry blocked: countertrend short (trend is bullish, mode=withTrendOnly)' });
+          return;
+        }
+        if (sig.side === 'long' && trendBearish) {
+          console.log(nowIso(), `ENTRY_BLOCKED reason=COUNTERTREND_LONG trend=bearish mode=withTrendOnly signal=long`);
+          tauriEmit({ type: 'log', message: 'Entry blocked: countertrend long (trend is bearish, mode=withTrendOnly)' });
+          return;
+        }
+      } else if (trendMode === 'disablecountertrendshorts') {
+        if (sig.side === 'short' && trendBullish) {
+          console.log(nowIso(), `ENTRY_BLOCKED reason=COUNTERTREND_SHORT trend=bullish mode=disableCountertrendShorts signal=short`);
+          tauriEmit({ type: 'log', message: 'Entry blocked: countertrend short (trend is bullish)' });
+          return;
+        }
+      }
+    }
+  }
+
+  // ---- Filter: Entry on Candle Close ----
+  const entryOnCandleClose = String(cfg?.signal?.entryOnCandleClose ?? true);
+  if (entryOnCandleClose === 'true' || entryOnCandleClose === '1') {
+    const candleMs = 15 * 60 * 1000;
+    const pollMs = Number(cfg?.signal?.pollMs ?? 20000);
+    const window = Math.max(pollMs * 2, 60000);
+    const timeInCandle = Date.now() % candleMs;
+    if (timeInCandle > window) {
+      console.log(nowIso(), `ENTRY_BLOCKED reason=AWAITING_CANDLE_CLOSE timeInCandle=${timeInCandle}ms window=${window}ms`);
+      return;
+    }
+  }
+
+  // ---- Filter: Block Shorts on Green Trigger Candle ----
+  const blockGreenShort = String(cfg?.signal?.blockShortIfGreenCandle ?? true);
+  if ((blockGreenShort === 'true' || blockGreenShort === '1') && sig.side === 'short') {
+    const lastOpen = c15.opens[c15.opens.length - 1];
+    const lastClose = c15.closes[c15.closes.length - 1];
+    if (lastClose > lastOpen) {
+      console.log(nowIso(), `ENTRY_BLOCKED reason=GREEN_TRIGGER_CANDLE open=${lastOpen} close=${lastClose}`);
+      tauriEmit({ type: 'log', message: `Entry blocked: trigger candle is green (open=${lastOpen.toFixed(0)}, close=${lastClose.toFixed(0)})` });
+      return;
+    }
+  }
 
   // Cap stopPct by exits.stopLossPct (if provided)
   // AND by a max loss on margin constraint (if provided):
