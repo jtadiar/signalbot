@@ -259,10 +259,20 @@ export default function Settings() {
                 onClick={() => {
                   setConfig(prev => {
                     const next = JSON.parse(JSON.stringify(prev));
-                    Object.assign(next.risk = next.risk || {}, preset.risk);
-                    Object.assign(next.signal = next.signal || {}, preset.signal);
-                    next.exits = next.exits || {};
-                    next.exits.tp = preset.exits.tp;
+                    if (!next.risk) next.risk = {};
+                    next.risk.maxLeverage = preset.risk.maxLeverage;
+                    next.risk.riskPerTradePct = preset.risk.riskPerTradePct;
+                    next.risk.marginUsePct = preset.risk.marginUsePct;
+                    next.risk.reentryCooldownSeconds = preset.risk.reentryCooldownSeconds;
+                    next.risk.lossCooldownMinutes = preset.risk.lossCooldownMinutes;
+                    if (!next.signal) next.signal = {};
+                    next.signal.confirmCandles = preset.signal.confirmCandles;
+                    next.signal.trendMode = preset.signal.trendMode;
+                    next.signal.entryOnCandleClose = preset.signal.entryOnCandleClose;
+                    next.signal.blockShortIfGreenCandle = preset.signal.blockShortIfGreenCandle;
+                    next.signal.stochFilter = { ...preset.signal.stochFilter };
+                    if (!next.exits) next.exits = {};
+                    next.exits.tp = JSON.parse(JSON.stringify(preset.exits.tp));
                     return next;
                   });
                   setHasEdits(true);
