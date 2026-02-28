@@ -418,170 +418,108 @@ export default function Settings() {
 
         <div style={{ opacity: config.setAndForget?.enabled ? 0.3 : 1, pointerEvents: config.setAndForget?.enabled ? 'none' : 'auto', transition: 'opacity 0.2s' }}>
 
-        <div className="grid-2">
-          <div className="card">
-            <div className="card-title">Signal Parameters</div>
+        {/* Signal Parameters — full-width 2-column */}
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-title">Signal Parameters</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 20px' }}>
             <div className="form-group">
-              <label className="form-label">Poll interval (ms) <Tip text="How often the bot checks for new signals. Lower = faster reaction but more API calls. Default 20000ms (20s)." /></label>
-              <input className="form-input" type="number" value={config.signal?.pollMs || 20000} onChange={e => update('signal.pollMs', Number(e.target.value))} />
+              <label className="form-label">EMA trend period (1h) <Tip text="EMA period on the 1-hour chart. Determines the trend direction (long vs short). Lower = faster trend flips, higher = smoother." /></label>
+              <input className="form-input" type="number" value={config.signal?.emaTrendPeriod || 50} onChange={e => update('signal.emaTrendPeriod', Number(e.target.value))} />
             </div>
-            <div className="grid-2">
-              <div className="form-group">
-                <label className="form-label">EMA trend period (1h) <Tip text="EMA period on the 1-hour chart. Determines the trend direction (long vs short). Lower = faster trend flips, higher = smoother." /></label>
-                <input className="form-input" type="number" value={config.signal?.emaTrendPeriod || 50} onChange={e => update('signal.emaTrendPeriod', Number(e.target.value))} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">EMA trigger period (15m) <Tip text="EMA period on the 15-min chart. Used for pullback/reclaim entries. Lower = more sensitive, earlier entries." /></label>
-                <input className="form-input" type="number" value={config.signal?.emaTriggerPeriod || 20} onChange={e => update('signal.emaTriggerPeriod', Number(e.target.value))} />
-              </div>
+            <div className="form-group">
+              <label className="form-label">EMA trigger period (15m) <Tip text="EMA period on the 15-min chart. Used for pullback/reclaim entries. Lower = more sensitive, earlier entries." /></label>
+              <input className="form-input" type="number" value={config.signal?.emaTriggerPeriod || 20} onChange={e => update('signal.emaTriggerPeriod', Number(e.target.value))} />
             </div>
-            <div className="grid-2">
-              <div className="form-group">
-                <label className="form-label">ATR period <Tip text="Lookback period for Average True Range on the 15m chart. Used to size stops and filter low-volatility entries." /></label>
-                <input className="form-input" type="number" value={config.signal?.atrPeriod || 14} onChange={e => update('signal.atrPeriod', Number(e.target.value))} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">ATR multiplier <Tip text="Stop distance = ATR × this multiplier. Higher = wider stops (more room, larger risk per trade). Lower = tighter stops." /></label>
-                <input className="form-input" type="number" step="0.1" value={config.signal?.atrMult || 1.5} onChange={e => update('signal.atrMult', Number(e.target.value))} />
-              </div>
+            <div className="form-group">
+              <label className="form-label">ATR period <Tip text="Lookback period for Average True Range on the 15m chart. Used to size stops and filter low-volatility entries." /></label>
+              <input className="form-input" type="number" value={config.signal?.atrPeriod || 14} onChange={e => update('signal.atrPeriod', Number(e.target.value))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">ATR multiplier <Tip text="Stop distance = ATR × this multiplier. Higher = wider stops (more room, larger risk per trade). Lower = tighter stops." /></label>
+              <input className="form-input" type="number" step="0.1" value={config.signal?.atrMult || 1.5} onChange={e => update('signal.atrMult', Number(e.target.value))} />
             </div>
             <div className="form-group">
               <label className="form-label">Max stop % <Tip text="If ATR suggests a stop wider than this, the signal is rejected. Prevents entries in extremely volatile conditions." /></label>
               <input className="form-input" type="number" step="0.1" min="0.1" max="20" value={Math.round((config.signal?.maxStopPct || 0.035) * 1000) / 10} onChange={e => update('signal.maxStopPct', Number(e.target.value) / 100)} />
-              <div className="form-hint">Reject signals with stop distance above this (e.g. 3.5 = 3.5%)</div>
+              <div className="form-hint">Reject signals with stop distance above this</div>
             </div>
-
-            <div style={{ borderTop: '1px solid var(--border)', marginTop: 12, paddingTop: 12 }}>
-              <button
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6, width: '100%',
-                  background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: showAdvanced ? 12 : 0,
-                }}
-              >
-                <span style={{ fontSize: 10, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: showAdvanced ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
-                <span style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontWeight: 600 }}>Advanced — Filters & Entry Guards</span>
-              </button>
-
-              {showAdvanced && (
-                <div>
-                  <div className="form-group">
-                    <label className="form-label">Max EMA distance % <Tip text="Skip signals when price is too far from the 1h EMA. Prevents entering late in extended moves that are likely to reverse. 0 = disabled. 2 = reject if price is >2% from EMA." /></label>
-                    <input className="form-input" type="number" step="0.5" min="0" max="10" value={Math.round((config.signal?.maxEmaDistPct ?? 0.02) * 10000) / 100} onChange={e => update('signal.maxEmaDistPct', Number(e.target.value) / 100)} />
-                    <div className="form-hint">{(config.signal?.maxEmaDistPct ?? 0.02) > 0 ? `Skip if price is >${((config.signal?.maxEmaDistPct ?? 0.02) * 100).toFixed(1)}% from 1h EMA` : 'Disabled (0)'}</div>
-                  </div>
-
-                  <div className="form-group">
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 8 }}>
-                      <input
-                        type="checkbox"
-                        checked={config.signal?.stochFilter?.enabled !== false}
-                        onChange={e => {
-                          const sf = config.signal?.stochFilter || {};
-                          update('signal.stochFilter', { overbought: sf.overbought ?? 80, oversold: sf.oversold ?? 20, enabled: e.target.checked });
-                        }}
-                      />
-                      <span>Stochastic RSI filter <Tip text="Filters out entries when momentum is exhausted. Skips shorts when Stoch RSI is oversold (bounce likely) and longs when overbought (pullback likely)." /></span>
-                    </label>
-                    <div className="grid-2">
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label className="form-label" style={{ fontSize: 11 }}>Overbought level</label>
-                        <input className="form-input" type="number" min="50" max="100" value={config.signal?.stochFilter?.overbought ?? 80} onChange={e => {
-                          const sf = config.signal?.stochFilter || {};
-                          update('signal.stochFilter', { enabled: sf.enabled !== false, oversold: sf.oversold ?? 20, overbought: Number(e.target.value) });
-                        }} />
-                        <div className="form-hint">Skip longs above this (default 80)</div>
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label className="form-label" style={{ fontSize: 11 }}>Oversold level</label>
-                        <input className="form-input" type="number" min="0" max="50" value={config.signal?.stochFilter?.oversold ?? 20} onChange={e => {
-                          const sf = config.signal?.stochFilter || {};
-                          update('signal.stochFilter', { enabled: sf.enabled !== false, overbought: sf.overbought ?? 80, oversold: Number(e.target.value) });
-                        }} />
-                        <div className="form-hint">Skip shorts below this (default 20)</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Confirm candles <Tip text="How many consecutive 15m candles must be on the wrong side of EMA20 before a reclaim counts. 1 = default (single candle). 2 = stricter (filters fakeouts but enters later)." /></label>
-                    <input className="form-input" type="number" min="1" max="3" value={config.signal?.confirmCandles ?? 1} onChange={e => update('signal.confirmCandles', Number(e.target.value))} />
-                    <div className="form-hint">{(config.signal?.confirmCandles ?? 1) >= 2 ? `Require ${config.signal.confirmCandles} candles on wrong side before reclaim` : 'Single candle reclaim (default)'}</div>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Trend mode <Tip text="Controls which trade directions are allowed based on the 1h EMA trend. 'Both' = current behavior. 'With trend only' = only longs in bullish, only shorts in bearish. 'Block countertrend shorts' = prevents shorting when trend is bullish (longs unaffected)." /></label>
-                    <select
-                      className="form-input"
-                      value={config.signal?.trendMode ?? 'both'}
-                      onChange={e => update('signal.trendMode', e.target.value)}
-                    >
-                      <option value="both">Both directions</option>
-                      <option value="withTrendOnly">With trend only</option>
-                      <option value="disableCountertrendShorts">Block countertrend shorts</option>
-                    </select>
-                    <div className="form-hint">
-                      {(config.signal?.trendMode ?? 'both') === 'both' ? 'Trades both directions regardless of trend' : (config.signal?.trendMode ?? '') === 'withTrendOnly' ? 'Only longs in bullish trend, only shorts in bearish' : 'Shorts blocked when trend is bullish — longs always allowed'}
-                    </div>
-                  </div>
-
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 8 }}>
-                    <input
-                      type="checkbox"
-                      checked={String(config.signal?.entryOnCandleClose ?? true).toLowerCase() !== 'false'}
-                      onChange={e => update('signal.entryOnCandleClose', e.target.checked)}
-                    />
-                    <span>Enter on candle close <Tip text="Only enter trades after the 15m candle closes. Prevents entries based on incomplete candle signals that may reverse before close. Recommended: on." /></span>
-                  </label>
-                  <div className="form-hint" style={{ marginLeft: 24, marginBottom: 12 }}>Wait for the 15m candle to close before acting on the signal.</div>
-
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={String(config.signal?.blockShortIfGreenCandle ?? true).toLowerCase() !== 'false'}
-                      onChange={e => update('signal.blockShortIfGreenCandle', e.target.checked)}
-                    />
-                    <span>Block shorts if trigger candle is green <Tip text="Skip short entries if the 15m trigger candle closed green (close > open). Prevents shorting into bullish momentum candles." /></span>
-                  </label>
-                  <div className="form-hint" style={{ marginLeft: 24 }}>Avoid shorting when the last 15m candle closed higher than it opened.</div>
-                </div>
-              )}
+            <div className="form-group">
+              <label className="form-label">Poll interval (ms) <Tip text="How often the bot checks for new signals. Lower = faster reaction but more API calls. Default 20000ms (20s)." /></label>
+              <input className="form-input" type="number" value={config.signal?.pollMs || 20000} onChange={e => update('signal.pollMs', Number(e.target.value))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Trend mode <Tip text="Controls which trade directions are allowed based on the 1h EMA trend. 'Both' = current behavior. 'With trend only' = only longs in bullish, only shorts in bearish. 'Block countertrend shorts' = prevents shorting when trend is bullish (longs unaffected)." /></label>
+              <select className="form-input" value={config.signal?.trendMode ?? 'both'} onChange={e => update('signal.trendMode', e.target.value)}>
+                <option value="both">Both directions</option>
+                <option value="withTrendOnly">With trend only</option>
+                <option value="disableCountertrendShorts">Block countertrend shorts</option>
+              </select>
+              <div className="form-hint">
+                {(config.signal?.trendMode ?? 'both') === 'both' ? 'Trades both directions' : (config.signal?.trendMode ?? '') === 'withTrendOnly' ? 'Only with trend' : 'Shorts blocked when bullish'}
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Confirm candles <Tip text="How many consecutive 15m candles must be on the wrong side of EMA before a reclaim counts. 1 = default. 2 = stricter." /></label>
+              <input className="form-input" type="number" min="1" max="3" value={config.signal?.confirmCandles ?? 1} onChange={e => update('signal.confirmCandles', Number(e.target.value))} />
+              <div className="form-hint">{(config.signal?.confirmCandles ?? 1) >= 2 ? `Require ${config.signal.confirmCandles} candles` : 'Single candle reclaim'}</div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Max EMA distance % <Tip text="Skip signals when price is too far from the 1h EMA. Prevents entering late in extended moves. 0 = disabled." /></label>
+              <input className="form-input" type="number" step="0.5" min="0" max="10" value={Math.round((config.signal?.maxEmaDistPct ?? 0.02) * 10000) / 100} onChange={e => update('signal.maxEmaDistPct', Number(e.target.value) / 100)} />
+              <div className="form-hint">{(config.signal?.maxEmaDistPct ?? 0.02) > 0 ? `Skip if >${((config.signal?.maxEmaDistPct ?? 0.02) * 100).toFixed(1)}% from EMA` : 'Disabled'}</div>
+            </div>
+            <div className="form-group">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input type="checkbox" checked={config.signal?.stochFilter?.enabled !== false} onChange={e => {
+                  const sf = config.signal?.stochFilter || {};
+                  update('signal.stochFilter', { overbought: sf.overbought ?? 80, oversold: sf.oversold ?? 20, enabled: e.target.checked });
+                }} />
+                <span className="form-label" style={{ marginBottom: 0 }}>Stochastic RSI filter <Tip text="Filters entries when momentum is exhausted. Skips shorts when oversold, longs when overbought." /></span>
+              </label>
+              <div className="form-hint" style={{ marginTop: 4 }}>{config.signal?.stochFilter?.enabled !== false ? `OB: ${config.signal?.stochFilter?.overbought ?? 80} / OS: ${config.signal?.stochFilter?.oversold ?? 20}` : 'Disabled'}</div>
             </div>
           </div>
+          <div style={{ display: 'flex', gap: 16, marginTop: 4 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12 }}>
+              <input type="checkbox" checked={String(config.signal?.entryOnCandleClose ?? true).toLowerCase() !== 'false'} onChange={e => update('signal.entryOnCandleClose', e.target.checked)} />
+              <span>Enter on candle close <Tip text="Only enter after 15m candle closes. Recommended: on." /></span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12 }}>
+              <input type="checkbox" checked={String(config.signal?.blockShortIfGreenCandle ?? true).toLowerCase() !== 'false'} onChange={e => update('signal.blockShortIfGreenCandle', e.target.checked)} />
+              <span>Block shorts on green candle <Tip text="Skip short entries if the 15m trigger candle closed green." /></span>
+            </label>
+          </div>
+        </div>
 
-          <div className="card">
-            <div className="card-title">Risk Management</div>
-            <div className="grid-2">
-              <div className="form-group">
-                <label className="form-label">Max leverage <Tip text="Maximum cross leverage the bot will use on Hyperliquid. Higher leverage = larger positions relative to margin." /></label>
-                <input className="form-input" type="number" value={config.risk?.maxLeverage || 10} onChange={e => update('risk.maxLeverage', Number(e.target.value))} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Max daily loss (USD) <Tip text="Bot halts for the day if cumulative losses exceed this amount. Protects against bad streaks." /></label>
-                <input className="form-input" type="number" value={config.risk?.maxDailyLossUsd || 200} onChange={e => update('risk.maxDailyLossUsd', Number(e.target.value))} />
-              </div>
+        {/* Risk Management — full-width */}
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-title">Risk Management</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 20px' }}>
+            <div className="form-group">
+              <label className="form-label">Max leverage <Tip text="Maximum cross leverage the bot will use on Hyperliquid. Higher leverage = larger positions relative to margin." /></label>
+              <input className="form-input" type="number" value={config.risk?.maxLeverage || 10} onChange={e => update('risk.maxLeverage', Number(e.target.value))} />
             </div>
-            <div className="grid-2">
-              <div className="form-group">
-                <label className="form-label">Risk per trade % <Tip text="% of your total account equity risked per trade. Used to calculate position size: size = (equity × risk%) / stop distance." /></label>
-                <input className="form-input" type="number" step="0.5" min="0.5" max="100" value={Math.round((config.risk?.riskPerTradePct || 0.03) * 1000) / 10} onChange={e => update('risk.riskPerTradePct', Number(e.target.value) / 100)} />
-                <div className="form-hint">% of equity risked per trade (e.g. 3 = 3%)</div>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Margin use % <Tip text="Max fraction of equity used as margin. 100% = use all equity. Lower values leave a buffer for drawdowns." /></label>
-                <input className="form-input" type="number" step="1" min="1" max="100" value={Math.round((config.risk?.marginUsePct || 0.75) * 100)} onChange={e => update('risk.marginUsePct', Number(e.target.value) / 100)} />
-                <div className="form-hint">How much of your equity to use (1–100%)</div>
-              </div>
+            <div className="form-group">
+              <label className="form-label">Max daily loss (USD) <Tip text="Bot halts for the day if cumulative losses exceed this amount. Protects against bad streaks." /></label>
+              <input className="form-input" type="number" value={config.risk?.maxDailyLossUsd || 200} onChange={e => update('risk.maxDailyLossUsd', Number(e.target.value))} />
             </div>
-            <div className="grid-2">
-              <div className="form-group">
-                <label className="form-label">Reentry cooldown (sec) <Tip text="Wait time after closing a position before entering a new trade. Prevents rapid re-entries on choppy signals." /></label>
-                <input className="form-input" type="number" value={config.risk?.reentryCooldownSeconds || 300} onChange={e => update('risk.reentryCooldownSeconds', Number(e.target.value))} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Loss cooldown (min) <Tip text="Extra cooldown after a losing trade. Prevents revenge trading by forcing a pause before the next entry." /></label>
-                <input className="form-input" type="number" value={config.risk?.lossCooldownMinutes || 15} onChange={e => update('risk.lossCooldownMinutes', Number(e.target.value))} />
-              </div>
+            <div className="form-group">
+              <label className="form-label">Risk per trade % <Tip text="% of your total account equity risked per trade. Used to calculate position size." /></label>
+              <input className="form-input" type="number" step="0.5" min="0.5" max="100" value={Math.round((config.risk?.riskPerTradePct || 0.03) * 1000) / 10} onChange={e => update('risk.riskPerTradePct', Number(e.target.value) / 100)} />
+              <div className="form-hint">% of equity risked per trade</div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Margin use % <Tip text="Max fraction of equity used as margin. 100% = use all equity. Lower values leave a buffer." /></label>
+              <input className="form-input" type="number" step="1" min="1" max="100" value={Math.round((config.risk?.marginUsePct || 0.75) * 100)} onChange={e => update('risk.marginUsePct', Number(e.target.value) / 100)} />
+              <div className="form-hint">How much of your equity to use</div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Reentry cooldown (sec) <Tip text="Wait time after closing a position before entering a new trade." /></label>
+              <input className="form-input" type="number" value={config.risk?.reentryCooldownSeconds || 300} onChange={e => update('risk.reentryCooldownSeconds', Number(e.target.value))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Loss cooldown (min) <Tip text="Extra cooldown after a losing trade. Prevents revenge trading." /></label>
+              <input className="form-input" type="number" value={config.risk?.lossCooldownMinutes || 15} onChange={e => update('risk.lossCooldownMinutes', Number(e.target.value))} />
             </div>
           </div>
         </div>
