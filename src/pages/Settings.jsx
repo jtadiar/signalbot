@@ -228,6 +228,61 @@ export default function Settings() {
           </div>
         </div>
 
+        {/* Preset Profiles */}
+        <div style={{ marginBottom: 16, padding: 16, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg-card)' }}>
+          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 10 }}>Quick Presets</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+            {[
+              { label: 'Conservative', color: '#22c55e', preset: {
+                risk: { maxLeverage: 3, riskPerTradePct: 0.01, marginUsePct: 0.5, reentryCooldownSeconds: 900, lossCooldownMinutes: 60 },
+                signal: { confirmCandles: 2, trendMode: 'withTrendOnly', entryOnCandleClose: true, blockShortIfGreenCandle: true, stochFilter: { enabled: true, overbought: 80, oversold: 20 } },
+                exits: { tp: [{ pct: 0.015, closeFrac: 0.25 }, { pct: 0.025, closeFrac: 0.25 }] },
+              }},
+              { label: 'Balanced', color: '#eab308', preset: {
+                risk: { maxLeverage: 8, riskPerTradePct: 0.02, marginUsePct: 0.75, reentryCooldownSeconds: 300, lossCooldownMinutes: 15 },
+                signal: { confirmCandles: 2, trendMode: 'disableCountertrendShorts', entryOnCandleClose: true, blockShortIfGreenCandle: true, stochFilter: { enabled: true, overbought: 80, oversold: 20 } },
+                exits: { tp: [{ pct: 0.02, closeFrac: 0.25 }, { pct: 0.03, closeFrac: 0.25 }] },
+              }},
+              { label: 'Aggressive', color: '#f97316', preset: {
+                risk: { maxLeverage: 15, riskPerTradePct: 0.03, marginUsePct: 1, reentryCooldownSeconds: 120, lossCooldownMinutes: 10 },
+                signal: { confirmCandles: 1, trendMode: 'both', entryOnCandleClose: true, blockShortIfGreenCandle: true, stochFilter: { enabled: true, overbought: 80, oversold: 20 } },
+                exits: { tp: [{ pct: 0.02, closeFrac: 0.25 }, { pct: 0.03, closeFrac: 0.25 }] },
+              }},
+              { label: 'Degen', color: '#ef4444', preset: {
+                risk: { maxLeverage: 30, riskPerTradePct: 0.05, marginUsePct: 1, reentryCooldownSeconds: 30, lossCooldownMinutes: 5 },
+                signal: { confirmCandles: 1, trendMode: 'both', entryOnCandleClose: false, blockShortIfGreenCandle: false, stochFilter: { enabled: false, overbought: 80, oversold: 20 } },
+                exits: { tp: [{ pct: 0.03, closeFrac: 0.25 }, { pct: 0.05, closeFrac: 0.25 }] },
+              }},
+            ].map(({ label, color, preset }) => (
+              <button
+                key={label}
+                onClick={() => {
+                  setConfig(prev => {
+                    const next = JSON.parse(JSON.stringify(prev));
+                    Object.assign(next.risk = next.risk || {}, preset.risk);
+                    Object.assign(next.signal = next.signal || {}, preset.signal);
+                    next.exits = next.exits || {};
+                    next.exits.tp = preset.exits.tp;
+                    return next;
+                  });
+                  setHasEdits(true);
+                  setSaved(false);
+                }}
+                style={{
+                  padding: '10px 8px', borderRadius: 10, border: `1px solid ${color}33`,
+                  background: `${color}0d`, color, fontSize: 12, fontWeight: 700,
+                  fontStyle: 'italic', cursor: 'pointer', transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { e.target.style.background = `${color}1a`; e.target.style.borderColor = `${color}66`; }}
+                onMouseLeave={e => { e.target.style.background = `${color}0d`; e.target.style.borderColor = `${color}33`; }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 8 }}>Select a preset to auto-fill settings. You can still customise individual values after.</div>
+        </div>
+
         {/* Risk Meter */}
         {(() => {
           const leverage = Number(config.risk?.maxLeverage || 10);
@@ -240,8 +295,6 @@ export default function Settings() {
           const blockGreen = String(config.signal?.blockShortIfGreenCandle ?? true).toLowerCase() !== 'false';
           const stochEnabled = config.signal?.stochFilter?.enabled !== false;
           const confirmCandles = Number(config.signal?.confirmCandles ?? 1);
-          const emaTrendBreak = String(config.exits?.emaTrendBreakExit?.enabled ?? false).toLowerCase() !== 'false';
-
           let score = 0;
           // Leverage (heavy weight — dominant risk factor)
           if (leverage <= 3) score += 0;
@@ -270,7 +323,6 @@ export default function Settings() {
           if (!blockGreen) score += 0.5;
           if (!stochEnabled) score += 1;
           if (confirmCandles < 2) score += 0.5;
-          if (!emaTrendBreak) score += 0.5;
 
           let level, label, sublabel, color;
           if (score <= 6) { level = 0; label = 'Conservative'; sublabel = 'Fewer trades, tighter risk, capital preservation'; color = '#22c55e'; }
