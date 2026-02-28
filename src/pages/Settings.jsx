@@ -243,15 +243,27 @@ export default function Settings() {
           const emaTrendBreak = String(config.exits?.emaTrendBreakExit?.enabled ?? false).toLowerCase() !== 'false';
 
           let score = 0;
-          // Leverage: 1-3 = 0, 4-7 = 1, 8-12 = 2, 13+ = 3
-          if (leverage <= 3) score += 0; else if (leverage <= 7) score += 1; else if (leverage <= 12) score += 2; else score += 3;
-          // Risk per trade: 1% = 0, 2-3% = 1, 4-5% = 2, 6%+ = 3
-          if (riskPct <= 1) score += 0; else if (riskPct <= 3) score += 1; else if (riskPct <= 5) score += 2; else score += 3;
-          // Margin use: 25% = 0, 50% = 1, 75% = 2, 100% = 3
-          if (marginUse <= 30) score += 0; else if (marginUse <= 55) score += 1; else if (marginUse <= 80) score += 2; else score += 3;
-          // Cooldowns: long = safe, short = risky
-          if (reentryCooldown >= 600) score += 0; else if (reentryCooldown >= 300) score += 0.5; else score += 1;
-          if (lossCooldown >= 30) score += 0; else if (lossCooldown >= 15) score += 0.5; else score += 1;
+          // Leverage (heavy weight — dominant risk factor)
+          if (leverage <= 3) score += 0;
+          else if (leverage <= 5) score += 2;
+          else if (leverage <= 10) score += 4;
+          else if (leverage <= 15) score += 6;
+          else if (leverage <= 20) score += 8;
+          else score += 10; // 20x+ is extreme
+          // Risk per trade
+          if (riskPct <= 1) score += 0;
+          else if (riskPct <= 2) score += 1;
+          else if (riskPct <= 3) score += 2;
+          else if (riskPct <= 5) score += 4;
+          else score += 6;
+          // Margin use (heavy weight)
+          if (marginUse <= 30) score += 0;
+          else if (marginUse <= 50) score += 1;
+          else if (marginUse <= 75) score += 3;
+          else score += 5; // 75%+ using most of account
+          // Cooldowns
+          if (reentryCooldown >= 600) score += 0; else if (reentryCooldown >= 300) score += 0.5; else score += 1.5;
+          if (lossCooldown >= 30) score += 0; else if (lossCooldown >= 15) score += 0.5; else score += 1.5;
           // Filters off = riskier
           if (trendMode === 'both') score += 1;
           if (!candleClose) score += 1;
@@ -260,11 +272,10 @@ export default function Settings() {
           if (confirmCandles < 2) score += 0.5;
           if (!emaTrendBreak) score += 0.5;
 
-          // Max possible ~18, map to 4 levels
           let level, label, sublabel, color;
-          if (score <= 5) { level = 0; label = 'Conservative'; sublabel = 'Fewer trades, tighter risk, capital preservation'; color = '#22c55e'; }
-          else if (score <= 9) { level = 1; label = 'Moderate'; sublabel = 'Balanced risk and reward'; color = '#eab308'; }
-          else if (score <= 13) { level = 2; label = 'Aggressive'; sublabel = 'Higher exposure, more frequent trades'; color = '#f97316'; }
+          if (score <= 6) { level = 0; label = 'Conservative'; sublabel = 'Fewer trades, tighter risk, capital preservation'; color = '#22c55e'; }
+          else if (score <= 12) { level = 1; label = 'Moderate'; sublabel = 'Balanced risk and reward'; color = '#eab308'; }
+          else if (score <= 18) { level = 2; label = 'Aggressive'; sublabel = 'Higher exposure, more frequent trades'; color = '#f97316'; }
           else { level = 3; label = 'High Risk'; sublabel = 'Maximum exposure, minimal filters'; color = '#ef4444'; }
 
           return (
