@@ -648,8 +648,8 @@ export default function Settings() {
 
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card-title">EMA Trend-Break Exit</div>
-          <p className="form-hint" style={{ marginBottom: 12 }}>
-            Close the entire position early if price breaks the trigger EMA — catches reversals before the hard stop is hit.
+          <p className="form-hint" style={{ marginBottom: 12, color: '#f97316' }}>
+            ⚠ This will close your entire position early if price breaks the trigger EMA. It can prevent large losses on reversals, but may also exit profitable trades during normal pullbacks. Use with caution.
           </p>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 12 }}>
             <input
@@ -661,7 +661,7 @@ export default function Settings() {
               }}
             />
             <span>Enable trend-break exit</span>
-            <Tip text="When enabled, the bot closes your position if the 15m candle closes on the wrong side of your trigger EMA (e.g. below EMA for longs, above for shorts). This exits before the hard stop loss is hit." />
+            <Tip text="When enabled, the bot will close your entire position if the 15m candle closes on the wrong side of your trigger EMA (below EMA for longs, above for shorts). This exits before your stop loss is hit — it can save you from reversals, but can also cut winning trades short during pullbacks. Not included in presets — enable only if you understand the risk." />
           </label>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label" style={{ fontSize: 11 }}>Confirm candles <Tip text="How many consecutive 15m candles must close on the wrong side of the EMA before the bot exits. 1 = exit on the first candle that breaks the EMA. 2 = wait for a second confirmation candle (reduces false exits but reacts slower)." /></label>
