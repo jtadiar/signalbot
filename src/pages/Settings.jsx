@@ -212,6 +212,63 @@ export default function Settings() {
 
       {/* Configure tab */}
       <div style={{ display: tab === 'configure' ? 'block' : 'none' }}>
+        {/* Risk Meter */}
+        {(() => {
+          const leverage = Number(config.risk?.maxLeverage || 10);
+          const riskPct = Number(config.risk?.riskPerTradePct || 0.03) * 100;
+          const marginUse = Number(config.risk?.marginUsePct || 0.75) * 100;
+          const reentryCooldown = Number(config.risk?.reentryCooldownSeconds || 300);
+          const lossCooldown = Number(config.risk?.lossCooldownMinutes || 15);
+          const trendMode = String(config.signal?.trendMode ?? 'both').toLowerCase();
+          const candleClose = String(config.signal?.entryOnCandleClose ?? true).toLowerCase() !== 'false';
+          const blockGreen = String(config.signal?.blockShortIfGreenCandle ?? true).toLowerCase() !== 'false';
+          const stochEnabled = config.signal?.stochFilter?.enabled !== false;
+          const confirmCandles = Number(config.signal?.confirmCandles ?? 1);
+          let score = 0;
+          if (leverage <= 3) score += 0;
+          else if (leverage <= 5) score += 2;
+          else if (leverage <= 10) score += 4;
+          else if (leverage <= 15) score += 6;
+          else if (leverage <= 20) score += 8;
+          else score += 10;
+          if (riskPct <= 1) score += 0; else if (riskPct <= 2) score += 1; else if (riskPct <= 3) score += 2; else if (riskPct <= 5) score += 4; else score += 6;
+          if (marginUse <= 30) score += 0; else if (marginUse <= 50) score += 1; else if (marginUse <= 75) score += 3; else score += 5;
+          if (reentryCooldown >= 600) score += 0; else if (reentryCooldown >= 300) score += 0.5; else score += 1.5;
+          if (lossCooldown >= 30) score += 0; else if (lossCooldown >= 15) score += 0.5; else score += 1.5;
+          if (trendMode === 'both') score += 1;
+          if (!candleClose) score += 1;
+          if (!blockGreen) score += 0.5;
+          if (!stochEnabled) score += 1;
+          if (confirmCandles < 2) score += 0.5;
+
+          let level, label, sublabel, color;
+          if (score <= 6) { level = 0; label = 'Conservative'; sublabel = 'Fewer trades, tighter risk, capital preservation'; color = '#22c55e'; }
+          else if (score <= 12) { level = 1; label = 'Moderate'; sublabel = 'Balanced risk and reward'; color = '#eab308'; }
+          else if (score <= 18) { level = 2; label = 'Aggressive'; sublabel = 'Higher exposure, more frequent trades'; color = '#f97316'; }
+          else { level = 3; label = 'High Risk'; sublabel = 'Maximum exposure, minimal filters'; color = '#ef4444'; }
+
+          return (
+            <div style={{ marginBottom: 16, padding: 16, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg-card)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontWeight: 600 }}>Risk Level</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color, fontStyle: 'italic' }}>{label}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+                {[0, 1, 2, 3].map(i => (
+                  <div key={i} style={{
+                    flex: 1, height: 8, borderRadius: 4,
+                    background: i <= level
+                      ? (i === 0 ? '#22c55e' : i === 1 ? '#eab308' : i === 2 ? '#f97316' : '#ef4444')
+                      : 'var(--bg-input)',
+                    transition: 'background 0.3s',
+                  }} />
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{sublabel}</div>
+            </div>
+          );
+        })()}
+
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
           marginBottom: 20, padding: 12, borderRadius: 8,
@@ -359,74 +416,6 @@ export default function Settings() {
         </div>
 
         <div style={{ opacity: config.setAndForget?.enabled ? 0.3 : 1, pointerEvents: config.setAndForget?.enabled ? 'none' : 'auto', transition: 'opacity 0.2s' }}>
-        {/* Risk Meter */}
-        {(() => {
-          const leverage = Number(config.risk?.maxLeverage || 10);
-          const riskPct = Number(config.risk?.riskPerTradePct || 0.03) * 100;
-          const marginUse = Number(config.risk?.marginUsePct || 0.75) * 100;
-          const reentryCooldown = Number(config.risk?.reentryCooldownSeconds || 300);
-          const lossCooldown = Number(config.risk?.lossCooldownMinutes || 15);
-          const trendMode = String(config.signal?.trendMode ?? 'both').toLowerCase();
-          const candleClose = String(config.signal?.entryOnCandleClose ?? true).toLowerCase() !== 'false';
-          const blockGreen = String(config.signal?.blockShortIfGreenCandle ?? true).toLowerCase() !== 'false';
-          const stochEnabled = config.signal?.stochFilter?.enabled !== false;
-          const confirmCandles = Number(config.signal?.confirmCandles ?? 1);
-          let score = 0;
-          // Leverage (heavy weight — dominant risk factor)
-          if (leverage <= 3) score += 0;
-          else if (leverage <= 5) score += 2;
-          else if (leverage <= 10) score += 4;
-          else if (leverage <= 15) score += 6;
-          else if (leverage <= 20) score += 8;
-          else score += 10; // 20x+ is extreme
-          // Risk per trade
-          if (riskPct <= 1) score += 0;
-          else if (riskPct <= 2) score += 1;
-          else if (riskPct <= 3) score += 2;
-          else if (riskPct <= 5) score += 4;
-          else score += 6;
-          // Margin use (heavy weight)
-          if (marginUse <= 30) score += 0;
-          else if (marginUse <= 50) score += 1;
-          else if (marginUse <= 75) score += 3;
-          else score += 5; // 75%+ using most of account
-          // Cooldowns
-          if (reentryCooldown >= 600) score += 0; else if (reentryCooldown >= 300) score += 0.5; else score += 1.5;
-          if (lossCooldown >= 30) score += 0; else if (lossCooldown >= 15) score += 0.5; else score += 1.5;
-          // Filters off = riskier
-          if (trendMode === 'both') score += 1;
-          if (!candleClose) score += 1;
-          if (!blockGreen) score += 0.5;
-          if (!stochEnabled) score += 1;
-          if (confirmCandles < 2) score += 0.5;
-
-          let level, label, sublabel, color;
-          if (score <= 6) { level = 0; label = 'Conservative'; sublabel = 'Fewer trades, tighter risk, capital preservation'; color = '#22c55e'; }
-          else if (score <= 12) { level = 1; label = 'Moderate'; sublabel = 'Balanced risk and reward'; color = '#eab308'; }
-          else if (score <= 18) { level = 2; label = 'Aggressive'; sublabel = 'Higher exposure, more frequent trades'; color = '#f97316'; }
-          else { level = 3; label = 'High Risk'; sublabel = 'Maximum exposure, minimal filters'; color = '#ef4444'; }
-
-          return (
-            <div style={{ marginBottom: 20, padding: 16, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg-card)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontWeight: 600 }}>Risk Level</span>
-                <span style={{ fontSize: 14, fontWeight: 700, color, fontStyle: 'italic' }}>{label}</span>
-              </div>
-              <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-                {[0, 1, 2, 3].map(i => (
-                  <div key={i} style={{
-                    flex: 1, height: 8, borderRadius: 4,
-                    background: i <= level
-                      ? (i === 0 ? '#22c55e' : i === 1 ? '#eab308' : i === 2 ? '#f97316' : '#ef4444')
-                      : 'var(--bg-input)',
-                    transition: 'background 0.3s',
-                  }} />
-                ))}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{sublabel}</div>
-            </div>
-          );
-        })()}
 
         <div className="grid-2">
           <div className="card">
