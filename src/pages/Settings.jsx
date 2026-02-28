@@ -212,7 +212,154 @@ export default function Settings() {
 
       {/* Configure tab */}
       <div style={{ display: tab === 'configure' ? 'block' : 'none' }}>
-        {/* Save bar + inline Risk Meter */}
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+          marginBottom: 20, padding: 12, borderRadius: 8,
+          background: hasEdits ? 'rgba(255, 107, 0, 0.06)' : 'transparent',
+          border: hasEdits ? '1px solid rgba(255, 107, 0, 0.15)' : '1px solid transparent',
+        }}>
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+            {saved ? 'Changes saved.' : hasEdits ? 'You have unsaved changes.' : ''}
+          </span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {saved && <span className="success-msg">Saved!</span>}
+            {error && <span className="error-msg">{error}</span>}
+            <button className="btn btn-primary" onClick={handleSaveConfig}>Save Changes</button>
+          </div>
+        </div>
+
+        {/* Set & Forget Mode */}
+        <div style={{
+          marginBottom: 16, padding: 16, borderRadius: 12,
+          border: config.setAndForget?.enabled ? '1px solid rgba(255, 107, 0, 0.4)' : '1px solid var(--border)',
+          background: config.setAndForget?.enabled ? 'rgba(255, 107, 0, 0.04)' : 'var(--bg-card)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: config.setAndForget?.enabled ? 12 : 0 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, fontStyle: 'italic', color: config.setAndForget?.enabled ? 'var(--accent)' : 'var(--text-primary)' }}>Set & Forget</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Autopilot mode — tight stops, trailing exits, trend-chasing scalper</div>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={!!config.setAndForget?.enabled}
+                onChange={e => {
+                  const next = JSON.parse(JSON.stringify(config));
+                  if (!next.setAndForget) next.setAndForget = {};
+                  next.setAndForget.enabled = e.target.checked;
+                  if (e.target.checked) {
+                    next.setAndForget.leverage = next.setAndForget.leverage || Number(next.risk?.maxLeverage) || 8;
+                    next.setAndForget.marginUsePct = next.setAndForget.marginUsePct || Number(next.risk?.marginUsePct) || 0.75;
+                    next.setAndForget.maxDailyLossUsd = next.setAndForget.maxDailyLossUsd || Number(next.risk?.maxDailyLossUsd) || 100;
+                  }
+                  setConfig(next);
+                  setHasEdits(true);
+                  setSaved(false);
+                }}
+              />
+            </label>
+          </div>
+          {config.setAndForget?.enabled && (
+            <div>
+              <div style={{
+                padding: 10, borderRadius: 8, marginBottom: 14,
+                background: 'rgba(255, 107, 0, 0.08)', border: '1px solid rgba(255, 107, 0, 0.15)',
+                fontSize: 11, color: '#f97316', lineHeight: 1.5,
+              }}>
+                This mode overrides all other settings. The bot will scalp trends with tight ATR stops and a trailing exit — no fixed take-profit targets. Profits are not guaranteed and losses will occur. Your stop loss trails behind price to lock in gains as the trade moves.
+              </div>
+              <div className="grid-2" style={{ gap: 12 }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Leverage</label>
+                  <input className="form-input" type="number" min="1" max="50" value={config.setAndForget?.leverage || 8}
+                    onChange={e => { const next = JSON.parse(JSON.stringify(config)); next.setAndForget.leverage = Number(e.target.value); setConfig(next); setHasEdits(true); setSaved(false); }} />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Margin use %</label>
+                  <input className="form-input" type="number" min="10" max="100" step="5" value={Math.round((config.setAndForget?.marginUsePct || 0.75) * 100)}
+                    onChange={e => { const next = JSON.parse(JSON.stringify(config)); next.setAndForget.marginUsePct = Number(e.target.value) / 100; setConfig(next); setHasEdits(true); setSaved(false); }} />
+                </div>
+              </div>
+              <div className="form-group" style={{ marginTop: 12, marginBottom: 0 }}>
+                <label className="form-label">Max daily loss (USD) <Tip text="Bot pauses for the day if total losses exceed this amount. Resets at UTC midnight." /></label>
+                <input className="form-input" type="number" min="10" step="10" value={config.setAndForget?.maxDailyLossUsd || 100}
+                  onChange={e => { const next = JSON.parse(JSON.stringify(config)); next.setAndForget.maxDailyLossUsd = Number(e.target.value); setConfig(next); setHasEdits(true); setSaved(false); }} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Preset Profiles */}
+        <div style={{ marginBottom: 16, padding: 16, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg-card)', opacity: config.setAndForget?.enabled ? 0.35 : 1, pointerEvents: config.setAndForget?.enabled ? 'none' : 'auto' }}>
+          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 10 }}>Quick Presets</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+            {[
+              { label: 'Conservative', color: '#22c55e', preset: {
+                risk: { maxLeverage: 3, riskPerTradePct: 0.01, marginUsePct: 0.5, reentryCooldownSeconds: 900, lossCooldownMinutes: 60 },
+                signal: { emaTrendPeriod: 100, emaTriggerPeriod: 30, atrPeriod: 14, atrMult: 2, confirmCandles: 2, trendMode: 'withTrendOnly', entryOnCandleClose: true, blockShortIfGreenCandle: true, stochFilter: { enabled: true, overbought: 80, oversold: 20 } },
+                exits: { tp: [{ pct: 0.015, closeFrac: 0.25 }, { pct: 0.025, closeFrac: 0.25 }] },
+              }},
+              { label: 'Balanced', color: '#eab308', preset: {
+                risk: { maxLeverage: 8, riskPerTradePct: 0.02, marginUsePct: 0.75, reentryCooldownSeconds: 300, lossCooldownMinutes: 15 },
+                signal: { emaTrendPeriod: 50, emaTriggerPeriod: 20, atrPeriod: 14, atrMult: 1.5, confirmCandles: 2, trendMode: 'disableCountertrendShorts', entryOnCandleClose: true, blockShortIfGreenCandle: true, stochFilter: { enabled: true, overbought: 80, oversold: 20 } },
+                exits: { tp: [{ pct: 0.02, closeFrac: 0.25 }, { pct: 0.03, closeFrac: 0.25 }] },
+              }},
+              { label: 'Aggressive', color: '#f97316', preset: {
+                risk: { maxLeverage: 15, riskPerTradePct: 0.03, marginUsePct: 1, reentryCooldownSeconds: 120, lossCooldownMinutes: 10 },
+                signal: { emaTrendPeriod: 40, emaTriggerPeriod: 15, atrPeriod: 10, atrMult: 1.2, confirmCandles: 1, trendMode: 'both', entryOnCandleClose: true, blockShortIfGreenCandle: true, stochFilter: { enabled: true, overbought: 80, oversold: 20 } },
+                exits: { tp: [{ pct: 0.02, closeFrac: 0.25 }, { pct: 0.03, closeFrac: 0.25 }] },
+              }},
+              { label: 'Degen', color: '#ef4444', preset: {
+                risk: { maxLeverage: 30, riskPerTradePct: 0.05, marginUsePct: 1, reentryCooldownSeconds: 30, lossCooldownMinutes: 5 },
+                signal: { emaTrendPeriod: 30, emaTriggerPeriod: 10, atrPeriod: 7, atrMult: 1, confirmCandles: 1, trendMode: 'both', entryOnCandleClose: false, blockShortIfGreenCandle: false, stochFilter: { enabled: false, overbought: 80, oversold: 20 } },
+                exits: { tp: [{ pct: 0.03, closeFrac: 0.25 }, { pct: 0.05, closeFrac: 0.25 }] },
+              }},
+            ].map(({ label, color, preset }) => (
+              <button
+                key={label}
+                onClick={() => {
+                  setConfig(prev => {
+                    const next = JSON.parse(JSON.stringify(prev));
+                    if (!next.risk) next.risk = {};
+                    next.risk.maxLeverage = preset.risk.maxLeverage;
+                    next.risk.riskPerTradePct = preset.risk.riskPerTradePct;
+                    next.risk.marginUsePct = preset.risk.marginUsePct;
+                    next.risk.reentryCooldownSeconds = preset.risk.reentryCooldownSeconds;
+                    next.risk.lossCooldownMinutes = preset.risk.lossCooldownMinutes;
+                    if (!next.signal) next.signal = {};
+                    next.signal.emaTrendPeriod = preset.signal.emaTrendPeriod;
+                    next.signal.emaTriggerPeriod = preset.signal.emaTriggerPeriod;
+                    next.signal.atrPeriod = preset.signal.atrPeriod;
+                    next.signal.atrMult = preset.signal.atrMult;
+                    next.signal.confirmCandles = preset.signal.confirmCandles;
+                    next.signal.trendMode = preset.signal.trendMode;
+                    next.signal.entryOnCandleClose = preset.signal.entryOnCandleClose;
+                    next.signal.blockShortIfGreenCandle = preset.signal.blockShortIfGreenCandle;
+                    next.signal.stochFilter = { ...preset.signal.stochFilter };
+                    if (!next.exits) next.exits = {};
+                    next.exits.tp = JSON.parse(JSON.stringify(preset.exits.tp));
+                    return next;
+                  });
+                  setHasEdits(true);
+                  setSaved(false);
+                }}
+                style={{
+                  padding: '10px 8px', borderRadius: 10, border: `1px solid ${color}33`,
+                  background: `${color}0d`, color, fontSize: 12, fontWeight: 700,
+                  fontStyle: 'italic', cursor: 'pointer', transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { e.target.style.background = `${color}1a`; e.target.style.borderColor = `${color}66`; }}
+                onMouseLeave={e => { e.target.style.background = `${color}0d`; e.target.style.borderColor = `${color}33`; }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 8 }}>Select a preset to auto-fill settings. You can still customise individual values after.</div>
+        </div>
+
+        <div style={{ opacity: config.setAndForget?.enabled ? 0.3 : 1, pointerEvents: config.setAndForget?.enabled ? 'none' : 'auto', transition: 'opacity 0.2s' }}>
+        {/* Risk Meter */}
         {(() => {
           const leverage = Number(config.risk?.maxLeverage || 10);
           const riskPct = Number(config.risk?.riskPerTradePct || 0.03) * 100;
@@ -225,197 +372,61 @@ export default function Settings() {
           const stochEnabled = config.signal?.stochFilter?.enabled !== false;
           const confirmCandles = Number(config.signal?.confirmCandles ?? 1);
           let score = 0;
+          // Leverage (heavy weight — dominant risk factor)
           if (leverage <= 3) score += 0;
           else if (leverage <= 5) score += 2;
           else if (leverage <= 10) score += 4;
           else if (leverage <= 15) score += 6;
           else if (leverage <= 20) score += 8;
-          else score += 10;
-          if (riskPct <= 1) score += 0; else if (riskPct <= 2) score += 1; else if (riskPct <= 3) score += 2; else if (riskPct <= 5) score += 4; else score += 6;
-          if (marginUse <= 30) score += 0; else if (marginUse <= 50) score += 1; else if (marginUse <= 75) score += 3; else score += 5;
+          else score += 10; // 20x+ is extreme
+          // Risk per trade
+          if (riskPct <= 1) score += 0;
+          else if (riskPct <= 2) score += 1;
+          else if (riskPct <= 3) score += 2;
+          else if (riskPct <= 5) score += 4;
+          else score += 6;
+          // Margin use (heavy weight)
+          if (marginUse <= 30) score += 0;
+          else if (marginUse <= 50) score += 1;
+          else if (marginUse <= 75) score += 3;
+          else score += 5; // 75%+ using most of account
+          // Cooldowns
           if (reentryCooldown >= 600) score += 0; else if (reentryCooldown >= 300) score += 0.5; else score += 1.5;
           if (lossCooldown >= 30) score += 0; else if (lossCooldown >= 15) score += 0.5; else score += 1.5;
+          // Filters off = riskier
           if (trendMode === 'both') score += 1;
           if (!candleClose) score += 1;
           if (!blockGreen) score += 0.5;
           if (!stochEnabled) score += 1;
           if (confirmCandles < 2) score += 0.5;
 
-          let level, riskLabel, color;
-          if (score <= 6) { level = 0; riskLabel = 'Conservative'; color = '#22c55e'; }
-          else if (score <= 12) { level = 1; riskLabel = 'Moderate'; color = '#eab308'; }
-          else if (score <= 18) { level = 2; riskLabel = 'Aggressive'; color = '#f97316'; }
-          else { level = 3; riskLabel = 'High Risk'; color = '#ef4444'; }
+          let level, label, sublabel, color;
+          if (score <= 6) { level = 0; label = 'Conservative'; sublabel = 'Fewer trades, tighter risk, capital preservation'; color = '#22c55e'; }
+          else if (score <= 12) { level = 1; label = 'Moderate'; sublabel = 'Balanced risk and reward'; color = '#eab308'; }
+          else if (score <= 18) { level = 2; label = 'Aggressive'; sublabel = 'Higher exposure, more frequent trades'; color = '#f97316'; }
+          else { level = 3; label = 'High Risk'; sublabel = 'Maximum exposure, minimal filters'; color = '#ef4444'; }
 
           return (
-            <div style={{
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16,
-              marginBottom: 16, padding: 12, borderRadius: 8,
-              background: hasEdits ? 'rgba(255, 107, 0, 0.06)' : 'transparent',
-              border: hasEdits ? '1px solid rgba(255, 107, 0, 0.15)' : '1px solid transparent',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', gap: 3, width: 80, flexShrink: 0 }}>
-                  {[0, 1, 2, 3].map(i => (
-                    <div key={i} style={{
-                      flex: 1, height: 6, borderRadius: 3,
-                      background: i <= level ? (i === 0 ? '#22c55e' : i === 1 ? '#eab308' : i === 2 ? '#f97316' : '#ef4444') : 'var(--bg-input)',
-                      transition: 'background 0.3s',
-                    }} />
-                  ))}
-                </div>
-                <span style={{ fontSize: 11, fontWeight: 700, color, fontStyle: 'italic', whiteSpace: 'nowrap' }}>{riskLabel}</span>
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                  {saved ? 'Saved.' : hasEdits ? 'Unsaved changes' : ''}
-                </span>
+            <div style={{ marginBottom: 20, padding: 16, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg-card)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontWeight: 600 }}>Risk Level</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color, fontStyle: 'italic' }}>{label}</span>
               </div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-                {saved && <span className="success-msg">Saved!</span>}
-                {error && <span className="error-msg">{error}</span>}
-                <button className="btn btn-primary" onClick={handleSaveConfig}>Save Changes</button>
+              <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+                {[0, 1, 2, 3].map(i => (
+                  <div key={i} style={{
+                    flex: 1, height: 8, borderRadius: 4,
+                    background: i <= level
+                      ? (i === 0 ? '#22c55e' : i === 1 ? '#eab308' : i === 2 ? '#f97316' : '#ef4444')
+                      : 'var(--bg-input)',
+                    transition: 'background 0.3s',
+                  }} />
+                ))}
               </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{sublabel}</div>
             </div>
           );
         })()}
-
-        {/* Set & Forget + Quick Presets — side by side */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-          {/* Set & Forget */}
-          <div style={{
-            padding: 14, borderRadius: 12,
-            border: config.setAndForget?.enabled ? '1px solid rgba(255, 107, 0, 0.4)' : '1px solid var(--border)',
-            background: config.setAndForget?.enabled ? 'rgba(255, 107, 0, 0.04)' : 'var(--bg-card)',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: config.setAndForget?.enabled ? 10 : 0 }}>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 700, fontStyle: 'italic', color: config.setAndForget?.enabled ? 'var(--accent)' : 'var(--text-primary)' }}>Set & Forget</div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Trailing scalper autopilot</div>
-              </div>
-              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={!!config.setAndForget?.enabled}
-                  onChange={e => {
-                    const next = JSON.parse(JSON.stringify(config));
-                    if (!next.setAndForget) next.setAndForget = {};
-                    next.setAndForget.enabled = e.target.checked;
-                    if (e.target.checked) {
-                      next.setAndForget.leverage = next.setAndForget.leverage || Number(next.risk?.maxLeverage) || 8;
-                      next.setAndForget.marginUsePct = next.setAndForget.marginUsePct || Number(next.risk?.marginUsePct) || 0.75;
-                      next.setAndForget.maxDailyLossUsd = next.setAndForget.maxDailyLossUsd || Number(next.risk?.maxDailyLossUsd) || 100;
-                    }
-                    setConfig(next);
-                    setHasEdits(true);
-                    setSaved(false);
-                  }}
-                />
-              </label>
-            </div>
-            {config.setAndForget?.enabled && (
-              <div>
-                <div style={{
-                  padding: 8, borderRadius: 6, marginBottom: 10,
-                  background: 'rgba(255, 107, 0, 0.08)', border: '1px solid rgba(255, 107, 0, 0.15)',
-                  fontSize: 10, color: '#f97316', lineHeight: 1.4,
-                }}>
-                  Overrides all settings. Tight stops, trailing exit, no fixed TPs. Profits are not guaranteed.
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: 10 }}>Leverage</label>
-                    <input className="form-input" type="number" min="1" max="50" value={config.setAndForget?.leverage || 8}
-                      onChange={e => { const next = JSON.parse(JSON.stringify(config)); next.setAndForget.leverage = Number(e.target.value); setConfig(next); setHasEdits(true); setSaved(false); }} />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: 10 }}>Margin %</label>
-                    <input className="form-input" type="number" min="10" max="100" step="5" value={Math.round((config.setAndForget?.marginUsePct || 0.75) * 100)}
-                      onChange={e => { const next = JSON.parse(JSON.stringify(config)); next.setAndForget.marginUsePct = Number(e.target.value) / 100; setConfig(next); setHasEdits(true); setSaved(false); }} />
-                  </div>
-                </div>
-                <div className="form-group" style={{ marginTop: 8, marginBottom: 0 }}>
-                  <label className="form-label" style={{ fontSize: 10 }}>Max daily loss ($) <Tip text="Bot pauses for the day if total losses exceed this amount. Resets at UTC midnight." /></label>
-                  <input className="form-input" type="number" min="10" step="10" value={config.setAndForget?.maxDailyLossUsd || 100}
-                    onChange={e => { const next = JSON.parse(JSON.stringify(config)); next.setAndForget.maxDailyLossUsd = Number(e.target.value); setConfig(next); setHasEdits(true); setSaved(false); }} />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Quick Presets */}
-          <div style={{
-            padding: 14, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg-card)',
-            opacity: config.setAndForget?.enabled ? 0.35 : 1, pointerEvents: config.setAndForget?.enabled ? 'none' : 'auto',
-            display: 'flex', flexDirection: 'column', justifyContent: 'center',
-          }}>
-            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 8 }}>Quick Presets</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
-              {[
-                { label: 'Conservative', color: '#22c55e', preset: {
-                  risk: { maxLeverage: 3, riskPerTradePct: 0.01, marginUsePct: 0.5, reentryCooldownSeconds: 900, lossCooldownMinutes: 60 },
-                  signal: { emaTrendPeriod: 100, emaTriggerPeriod: 30, atrPeriod: 14, atrMult: 2, confirmCandles: 2, trendMode: 'withTrendOnly', entryOnCandleClose: true, blockShortIfGreenCandle: true, stochFilter: { enabled: true, overbought: 80, oversold: 20 } },
-                  exits: { tp: [{ pct: 0.015, closeFrac: 0.25 }, { pct: 0.025, closeFrac: 0.25 }] },
-                }},
-                { label: 'Balanced', color: '#eab308', preset: {
-                  risk: { maxLeverage: 8, riskPerTradePct: 0.02, marginUsePct: 0.75, reentryCooldownSeconds: 300, lossCooldownMinutes: 15 },
-                  signal: { emaTrendPeriod: 50, emaTriggerPeriod: 20, atrPeriod: 14, atrMult: 1.5, confirmCandles: 2, trendMode: 'disableCountertrendShorts', entryOnCandleClose: true, blockShortIfGreenCandle: true, stochFilter: { enabled: true, overbought: 80, oversold: 20 } },
-                  exits: { tp: [{ pct: 0.02, closeFrac: 0.25 }, { pct: 0.03, closeFrac: 0.25 }] },
-                }},
-                { label: 'Aggressive', color: '#f97316', preset: {
-                  risk: { maxLeverage: 15, riskPerTradePct: 0.03, marginUsePct: 1, reentryCooldownSeconds: 120, lossCooldownMinutes: 10 },
-                  signal: { emaTrendPeriod: 40, emaTriggerPeriod: 15, atrPeriod: 10, atrMult: 1.2, confirmCandles: 1, trendMode: 'both', entryOnCandleClose: true, blockShortIfGreenCandle: true, stochFilter: { enabled: true, overbought: 80, oversold: 20 } },
-                  exits: { tp: [{ pct: 0.02, closeFrac: 0.25 }, { pct: 0.03, closeFrac: 0.25 }] },
-                }},
-                { label: 'Degen', color: '#ef4444', preset: {
-                  risk: { maxLeverage: 30, riskPerTradePct: 0.05, marginUsePct: 1, reentryCooldownSeconds: 30, lossCooldownMinutes: 5 },
-                  signal: { emaTrendPeriod: 30, emaTriggerPeriod: 10, atrPeriod: 7, atrMult: 1, confirmCandles: 1, trendMode: 'both', entryOnCandleClose: false, blockShortIfGreenCandle: false, stochFilter: { enabled: false, overbought: 80, oversold: 20 } },
-                  exits: { tp: [{ pct: 0.03, closeFrac: 0.25 }, { pct: 0.05, closeFrac: 0.25 }] },
-                }},
-              ].map(({ label, color, preset }) => (
-                <button
-                  key={label}
-                  onClick={() => {
-                    setConfig(prev => {
-                      const next = JSON.parse(JSON.stringify(prev));
-                      if (!next.risk) next.risk = {};
-                      next.risk.maxLeverage = preset.risk.maxLeverage;
-                      next.risk.riskPerTradePct = preset.risk.riskPerTradePct;
-                      next.risk.marginUsePct = preset.risk.marginUsePct;
-                      next.risk.reentryCooldownSeconds = preset.risk.reentryCooldownSeconds;
-                      next.risk.lossCooldownMinutes = preset.risk.lossCooldownMinutes;
-                      if (!next.signal) next.signal = {};
-                      next.signal.emaTrendPeriod = preset.signal.emaTrendPeriod;
-                      next.signal.emaTriggerPeriod = preset.signal.emaTriggerPeriod;
-                      next.signal.atrPeriod = preset.signal.atrPeriod;
-                      next.signal.atrMult = preset.signal.atrMult;
-                      next.signal.confirmCandles = preset.signal.confirmCandles;
-                      next.signal.trendMode = preset.signal.trendMode;
-                      next.signal.entryOnCandleClose = preset.signal.entryOnCandleClose;
-                      next.signal.blockShortIfGreenCandle = preset.signal.blockShortIfGreenCandle;
-                      next.signal.stochFilter = { ...preset.signal.stochFilter };
-                      if (!next.exits) next.exits = {};
-                      next.exits.tp = JSON.parse(JSON.stringify(preset.exits.tp));
-                      return next;
-                    });
-                    setHasEdits(true);
-                    setSaved(false);
-                  }}
-                  style={{
-                    padding: '8px 6px', borderRadius: 8, border: `1px solid ${color}33`,
-                    background: `${color}0d`, color, fontSize: 11, fontWeight: 700,
-                    fontStyle: 'italic', cursor: 'pointer', transition: 'all 0.15s',
-                  }}
-                  onMouseEnter={e => { e.target.style.background = `${color}1a`; e.target.style.borderColor = `${color}66`; }}
-                  onMouseLeave={e => { e.target.style.background = `${color}0d`; e.target.style.borderColor = `${color}33`; }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 6 }}>Auto-fills all settings. Customise after.</div>
-          </div>
-        </div>
-
-        <div style={{ opacity: config.setAndForget?.enabled ? 0.3 : 1, pointerEvents: config.setAndForget?.enabled ? 'none' : 'auto', transition: 'opacity 0.2s' }}>
 
         <div className="grid-2">
           <div className="card">
