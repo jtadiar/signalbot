@@ -656,6 +656,25 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error building tauri application")
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                if let Some(state) = app_handle.try_state::<BotState>() {
+                    let mut child_lock = state.child.lock().unwrap();
+                    if let Some(ref mut child) = *child_lock {
+                        #[cfg(unix)]
+                        unsafe { libc::kill(child.id() as i32, libc::SIGTERM); }
+                        for _ in 0..30 {
+                            std::thread::sleep(std::time::Duration::from_millis(100));
+                            if let Ok(Some(_)) = child.try_wait() { break; }
+                        }
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        *state.running.lock().unwrap() = false;
+                        *child_lock = None;
+                    }
+                }
+            }
+        });
 }

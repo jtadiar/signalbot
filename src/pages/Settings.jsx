@@ -84,8 +84,39 @@ export default function Settings() {
 
   const [showRestartNotice, setShowRestartNotice] = useState(false);
 
+  function validateConfig(c) {
+    const errs = [];
+    const lev = Number(c?.risk?.maxLeverage);
+    if (!Number.isFinite(lev) || lev < 1 || lev > 125) errs.push('Leverage must be between 1 and 125');
+    const margin = Number(c?.risk?.marginUsePct);
+    if (Number.isFinite(margin) && (margin < 0.01 || margin > 1)) errs.push('Margin use % must be between 1% and 100%');
+    const maxLoss = Number(c?.risk?.maxDailyLossUsd);
+    if (Number.isFinite(maxLoss) && maxLoss <= 0) errs.push('Max daily loss must be positive');
+    const riskPer = Number(c?.risk?.riskPerTradePct);
+    if (Number.isFinite(riskPer) && (riskPer <= 0 || riskPer > 0.5)) errs.push('Risk per trade must be between 0.1% and 50%');
+    const emaTrend = Number(c?.signal?.emaTrendPeriod);
+    if (Number.isFinite(emaTrend) && (emaTrend < 2 || emaTrend > 500)) errs.push('EMA trend period must be between 2 and 500');
+    const emaTrigger = Number(c?.signal?.emaTriggerPeriod);
+    if (Number.isFinite(emaTrigger) && (emaTrigger < 2 || emaTrigger > 500)) errs.push('EMA trigger period must be between 2 and 500');
+    const atrPd = Number(c?.signal?.atrPeriod);
+    if (Number.isFinite(atrPd) && (atrPd < 2 || atrPd > 200)) errs.push('ATR period must be between 2 and 200');
+    const tps = c?.exits?.tp;
+    if (Array.isArray(tps)) {
+      const totalFrac = tps.reduce((s, t) => s + Number(t?.closeFrac || 0), 0);
+      if (totalFrac > 1.01) errs.push('Total TP close fractions exceed 100%');
+    }
+    const saf = c?.setAndForget;
+    if (saf?.enabled) {
+      const safLev = Number(saf.leverage);
+      if (!Number.isFinite(safLev) || safLev < 1 || safLev > 125) errs.push('Set & Forget leverage must be between 1 and 125');
+    }
+    return errs;
+  }
+
   async function handleSaveConfig() {
     setError('');
+    const errs = validateConfig(config);
+    if (errs.length) { setError(errs.join('. ')); return; }
     try {
       await writeConfig(config);
       localStorage.setItem('bot_config', JSON.stringify(config));

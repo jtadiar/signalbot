@@ -18,7 +18,7 @@ try {
     const dotenv = await import('dotenv');
     dotenv.config({ path: envPath, quiet: true });
   }
-} catch {}
+} catch (e) { console.error('dotenv load failed:', e?.message); }
 
 function expandHome(p) {
   if (p && p.startsWith('~/')) return p.replace('~', homedir());
@@ -73,7 +73,7 @@ try {
       state.exitsPlacedForPosKey = null;
       state.lastExitAtMs = Date.now();
       fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
-    } catch {}
+    } catch (e) { console.error('clearBotState failed:', e?.message); }
   }
 
   if (Math.abs(szi) === 0) {
@@ -102,7 +102,7 @@ try {
     if (triggers.length) {
       await sdk.exchange.cancelOrder(triggers.map(o => ({ coin: coinPerp, o: o.oid }))).catch(() => {});
     }
-  } catch {}
+  } catch (e) { console.error('cancel triggers failed:', e?.message); }
 
   // Market close entire position
   const resp = await sdk.custom.marketClose(coinPerp);
@@ -116,13 +116,13 @@ try {
     if (exitPx && entryPx) {
       pnlUsd = (side === 'short' ? (entryPx - exitPx) : (exitPx - entryPx)) * exitSz;
     }
-  } catch {}
+  } catch (e) { console.error('parse fill failed:', e?.message); }
 
   // Log the close event
   try {
     const ev = { ts: new Date().toISOString(), action: 'CLOSE', side, sizeBtc: exitSz, entryPx, exitPx, pnlUsd, leader: 'manual_close', partial: false };
     fs.appendFileSync(TRADE_LOG, JSON.stringify(ev) + '\n');
-  } catch {}
+  } catch (e) { console.error('trade log write failed:', e?.message); }
 
   // Clear bot state so it doesn't think position is still open
   try {
@@ -140,7 +140,7 @@ try {
     state.exitsPlacedForPosKey = null;
     state.lastExitAtMs = Date.now();
     fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
-  } catch {}
+  } catch (e) { console.error('clear state after close failed:', e?.message); }
 
   console.log(JSON.stringify({ ok: true, closed: true, side, exitPx, exitSz, pnlUsd, entryPx }));
 } catch (e) {

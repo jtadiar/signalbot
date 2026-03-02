@@ -8,17 +8,58 @@ import { candleSnapshot, allMids, spotClearinghouseState } from './hl_info.mjs';
 const IS_TAURI = !!process.env.TAURI;
 function tauriEmit(evt) {
   if (!IS_TAURI) return;
-  try { process.stdout.write(JSON.stringify(evt) + '\n'); } catch {}
+  try { process.stdout.write(JSON.stringify(evt) + '\n'); } catch (e) { /* stdout write failed — ignore */ }
 }
+
+function logErr(ctx, e) { console.error(new Date().toISOString(), `[${ctx}]`, e?.message || e); }
+function logWarn(ctx, e) { console.warn(new Date().toISOString(), `[${ctx}]`, e?.message || e); }
+
+const API_TIMEOUT_MS = 15_000;
+const RETRY_MAX = 3;
+const RETRY_STATUS = new Set([429, 502, 503, 504]);
 
 const _origFetch = globalThis.fetch;
 globalThis.fetch = async (...args) => {
-  const res = await _origFetch(...args);
-  if (!res.ok) {
-    const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '(unknown)';
-    console.error(`[fetch] ${res.status} ${res.statusText} → ${url.slice(0, 150)}`);
+  const [input, init = {}] = args;
+  const url = typeof input === 'string' ? input : input?.url || '(unknown)';
+
+  for (let attempt = 0; attempt <= RETRY_MAX; attempt++) {
+    const ac = !init.signal ? new AbortController() : null;
+    const timer = ac ? setTimeout(() => ac.abort(), API_TIMEOUT_MS) : null;
+    try {
+      const fetchInit = ac ? { ...init, signal: ac.signal } : init;
+      const res = await _origFetch(input, fetchInit);
+      if (timer) clearTimeout(timer);
+      if (RETRY_STATUS.has(res.status) && attempt < RETRY_MAX) {
+        const wait = res.status === 429
+          ? Math.min(10_000, Number(res.headers.get('retry-after') || 2) * 1000)
+          : 1000 * Math.pow(2, attempt);
+        console.warn(`[fetch] ${res.status} → ${url.slice(0, 100)} — retry ${attempt + 1}/${RETRY_MAX} in ${wait}ms`);
+        await new Promise(r => setTimeout(r, wait));
+        continue;
+      }
+      if (!res.ok) {
+        console.error(`[fetch] ${res.status} ${res.statusText} → ${url.slice(0, 150)}`);
+      }
+      return res;
+    } catch (e) {
+      if (timer) clearTimeout(timer);
+      if (e?.name === 'AbortError') {
+        if (attempt < RETRY_MAX) {
+          console.warn(`[fetch] timeout → ${url.slice(0, 100)} — retry ${attempt + 1}/${RETRY_MAX}`);
+          await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+          continue;
+        }
+        throw new Error(`API timeout after ${API_TIMEOUT_MS}ms (${RETRY_MAX} retries)`);
+      }
+      if (attempt < RETRY_MAX && /ECONNRESET|ECONNREFUSED|ETIMEDOUT|socket hang up|fetch failed/i.test(e?.message || '')) {
+        console.warn(`[fetch] ${e.message} → ${url.slice(0, 100)} — retry ${attempt + 1}/${RETRY_MAX}`);
+        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+        continue;
+      }
+      throw e;
+    }
   }
-  return res;
 };
 
 const DATA_DIR = process.env.DATA_DIR || path.join(homedir(), '.config', 'hl-signalbot');
@@ -29,7 +70,7 @@ for (const file of ['config.json', 'trades.jsonl', 'state.json', '.env']) {
   const oldPath = path.join(BOT_DIR, file);
   const newPath = path.join(DATA_DIR, file);
   if (fs.existsSync(oldPath) && !fs.existsSync(newPath)) {
-    try { fs.copyFileSync(oldPath, newPath); } catch {}
+    try { fs.copyFileSync(oldPath, newPath); } catch (e) { logWarn('migrate', e); }
   }
 }
 const CONFIG_PATH = process.env.CONFIG || path.join(DATA_DIR, 'config.json');
@@ -47,15 +88,15 @@ if (SAF_ENABLED) {
   cfg.risk.maxLeverage = lev;
   cfg.risk.marginUsePct = marginPct;
   cfg.risk.maxDailyLossUsd = maxLoss;
-  cfg.risk.riskPerTradePct = 0.015;
-  cfg.risk.reentryCooldownSeconds = 60;
-  cfg.risk.lossCooldownMinutes = 5;
+  cfg.risk.riskPerTradePct = 0.01;
+  cfg.risk.reentryCooldownSeconds = 180;
+  cfg.risk.lossCooldownMinutes = 15;
 
   cfg.signal.emaTrendPeriod = 50;
   cfg.signal.emaTriggerPeriod = 15;
   cfg.signal.atrPeriod = 10;
-  cfg.signal.atrMult = 1.0;
-  cfg.signal.maxStopPct = 0.025;
+  cfg.signal.atrMult = 0.5;
+  cfg.signal.maxStopPct = 0.01;
   cfg.signal.confirmCandles = 1;
   cfg.signal.trendMode = 'withTrendOnly';
   cfg.signal.entryOnCandleClose = true;
@@ -65,17 +106,19 @@ if (SAF_ENABLED) {
   cfg.signal.stochFilter.overbought = 80;
   cfg.signal.stochFilter.oversold = 20;
 
-  cfg.exits.tp = [];
-  cfg.exits.trailToBreakevenOnTp1 = false;
+  cfg.exits.tp = [
+    { pct: 0.003, closeFrac: 0.5 },
+  ];
+  cfg.exits.trailToBreakevenOnTp1 = true;
   cfg.exits.trailStopToTp1OnTp2 = false;
   cfg.exits.trailingAfterTp2 = { enabled: false };
   if (!cfg.exits.emaTrendBreakExit) cfg.exits.emaTrendBreakExit = {};
   cfg.exits.emaTrendBreakExit.enabled = false;
-  cfg.exits.stopLossPct = 0.05;
-  cfg.exits.maxMarginLossPct = 0.15;
+  cfg.exits.stopLossPct = 0.015;
+  cfg.exits.maxMarginLossPct = 0.05;
   cfg.exits.runnerExit = 'signal';
 
-  cfg.exits._setAndForgetTrail = { enabled: true, trailPct: 0.006, minUpdateSeconds: 5 };
+  cfg.exits._setAndForgetTrail = { enabled: true, trailPct: 0.004, minUpdateSeconds: 5 };
 
   console.log('SET & FORGET mode active — config overridden. Leverage:', lev, 'Margin:', (marginPct * 100) + '%', 'MaxDailyLoss:', maxLoss);
 }
@@ -119,7 +162,7 @@ try {
     const p = cfg?.telegram?.tokenPath;
     if (p) TG_TOKEN = readSecretFromPath(String(p).trim());
   }
-} catch {}
+} catch (e) { logWarn('tg-token', e); }
 const TG_CHAT = (process.env.TG_CHAT ? String(process.env.TG_CHAT).trim() : (cfg?.telegram?.channel || null));
 
 if (!tgOn) {
@@ -144,7 +187,7 @@ async function tgSend(text){
     });
     _lastTgText = text;
     _lastTgAtMs = now;
-  } catch {}
+  } catch (e) { logWarn('tg-send', e); }
 }
 
 function fmtTime(isoOrMs){
@@ -222,7 +265,7 @@ async function pingNewFills(){
       state.lastFillTimeMs = maxTimeMs;
       persistState();
     }
-  } catch {}
+  } catch (e) { logWarn('pingNewFills', e); }
 }
 
 const sdk = new Hyperliquid({
@@ -264,9 +307,10 @@ function persistState(){
         lastFillTimeMs: state.lastFillTimeMs,
         lastLossAtMs: state.lastLossAtMs,
         lastTrailAtMs: state.lastTrailAtMs,
+        lastTpslVerifyMs: state.lastTpslVerifyMs,
       }, null, 2)
     );
-  } catch {}
+  } catch (e) { logErr('persistState', e); }
 }
 
 function nowIso(){ return new Date().toISOString(); }
@@ -310,7 +354,7 @@ if (loaded && typeof loaded === 'object') Object.assign(state, loaded);
 // Back-compat: if we previously persisted only `halted: true`, attach today's UTC day key
 // so the auto-reset-at-midnight logic works immediately.
 if (state.halted && !state.haltDayUtc) {
-  try { state.haltDayUtc = utcDayKey(state.lastActionAt || Date.now()); } catch {}
+  try { state.haltDayUtc = utcDayKey(state.lastActionAt || Date.now()); } catch (e) { logWarn('haltDayUtc', e); }
 }
 
 function roundSz(coin, sz){
@@ -340,7 +384,7 @@ async function dailyPnl(){
       const v = Number(last?.[1] ?? 0);
       if (Number.isFinite(v)) pnl = v;
     }
-  } catch {}
+  } catch (e) { logWarn('dailyPnl-portfolio', e); }
 
   // Sum today's fees from fills
   let fees = 0;
@@ -352,7 +396,7 @@ async function dailyPnl(){
       const fee = Number(f.fee || 0);
       if (Number.isFinite(fee)) fees += fee;
     }
-  } catch {}
+  } catch (e) { logWarn('dailyPnl-fees', e); }
 
   return { pnl, fees };
 }
@@ -394,7 +438,7 @@ async function getBtcPosition(){
         triggerPx: Number(o.triggerPx || 0),
         size: Number(o.sz || 0),
       }));
-  } catch {}
+  } catch (e) { logWarn('getBtcPosition-orders', e); }
 
   // Sum trading fees for this position's fills
   let posFees = 0;
@@ -411,7 +455,7 @@ async function getBtcPosition(){
           posFees += Math.abs(Number(f.fee || 0));
         }
       }
-    } catch {}
+    } catch (e) { logWarn('getBtcPosition-fees', e); }
   }
 
   tauriEmit({ type: 'position', data: { size: szi, entryPx, unrealizedPnl, marginUsed, side: szi > 0 ? 'long' : szi < 0 ? 'short' : null, coin: cfg.market.coin, orders, fees: posFees, stopPx: state.stopPx || null, tp1Done: state.tp1Done, tp2Done: state.tp2Done } });
@@ -426,7 +470,7 @@ async function midPx(){
 }
 
 async function ensureLeverage(){
-  try { await sdk.exchange.updateLeverage(`${cfg.market.coin}-PERP`, 'cross', cfg.risk.maxLeverage); } catch {}
+  try { await sdk.exchange.updateLeverage(`${cfg.market.coin}-PERP`, 'cross', cfg.risk.maxLeverage); } catch (e) { logWarn('ensureLeverage', e); }
 }
 
 async function placeMarket(side, sz){
@@ -466,11 +510,11 @@ async function cancelAllBtcOrders({ cancelStops=true, cancelTps=true } = {}){
     try {
       await sdk.exchange.cancelOrder(cancelsPerp);
       return;
-    } catch {}
+    } catch (e) { logWarn('cancelOrders-perp', e); }
 
     const cancelsSpot = relevant.map(o => ({ coin: cfg.market.coin, o: o.oid }));
-    try { await sdk.exchange.cancelOrder(cancelsSpot); } catch {}
-  } catch {}
+    try { await sdk.exchange.cancelOrder(cancelsSpot); } catch (e) { logWarn('cancelOrders-spot', e); }
+  } catch (e) { logErr('cancelAllBtcOrders', e); }
 }
 
 async function replaceStop({ side, stopPx, absSz }){
@@ -481,7 +525,7 @@ async function replaceStop({ side, stopPx, absSz }){
     const coinPerp = `${cfg.market.coin}-PERP`;
     const stops = (oo||[]).filter(o => (o.coin===cfg.market.coin || o.coin===coinPerp) && o.reduceOnly===true && String(o.orderType||'').toLowerCase().includes('stop'));
     if (stops.length){
-      try { await sdk.exchange.cancelOrder(stops.map(o=>({ coin: coinPerp, o: o.oid }))); } catch {}
+      try { await sdk.exchange.cancelOrder(stops.map(o=>({ coin: coinPerp, o: o.oid }))); } catch (e) { logWarn('replaceStop-cancel', e); }
     }
 
     const px = roundPx(cfg.market.coin, stopPx);
@@ -494,7 +538,7 @@ async function replaceStop({ side, stopPx, absSz }){
       reduce_only: true,
       grouping: 'positionTpsl',
     });
-  } catch {}
+  } catch (e) { logErr('replaceStop', e); }
 }
 
 // Backwards compatibility
@@ -600,7 +644,7 @@ async function manageOpenPosition(pos){
           }
         }
       }
-    } catch {}
+    } catch (e) { logWarn('stopPct-infer', e); }
 
     stopPct = Number(state.stopPct || 0);
     if (!(stopPct > 0)){
@@ -633,7 +677,7 @@ async function manageOpenPosition(pos){
       const coinPerp = `${cfg.market.coin}-PERP`;
       hasExistingStop = (oo||[]).some(o => (o.coin===cfg.market.coin || o.coin===coinPerp) && o.reduceOnly===true && String(o.orderType||'').toLowerCase().includes('stop'));
       hasExistingTp = (oo||[]).some(o => (o.coin===cfg.market.coin || o.coin===coinPerp) && o.reduceOnly===true && (String(o.orderType||'').toLowerCase().includes('take profit') || o.tpsl === 'tp'));
-    } catch {}
+    } catch (e) { logWarn('ensureNativeTpsl-check', e); }
 
     // Clear existing triggers we own so we don't stack duplicates.
     // Respect manual exits: if there is an existing stop or TP, leave it alone.
@@ -725,13 +769,32 @@ async function manageOpenPosition(pos){
         if (active.length < wantCount) {
           console.warn(nowIso(), `TP/SL verify: expected ${wantCount}, found ${active.length} — API may be lagging, orders were accepted`);
         }
-      } catch {}
+      } catch (e) { logWarn('ensureNativeTpsl-verify', e); }
       return { ok: true, posKey, wantCount, okCount, hasExistingStop, hasExistingTp };
     }
 
     // Don't mark as placed; we want to retry next loop.
     console.error(nowIso(), 'TP/SL placement incomplete', { okCount, wantCount, errors });
     return { ok: false, posKey, wantCount, okCount, hasExistingStop, hasExistingTp, errors };
+  }
+
+  // Periodically force a re-verification that TP/SL orders still exist (every 5 min)
+  const TPSL_VERIFY_INTERVAL_MS = 5 * 60 * 1000;
+  if (state.exitsPlacedForPosKey && (Date.now() - (state.lastTpslVerifyMs || 0)) > TPSL_VERIFY_INTERVAL_MS) {
+    try {
+      const oo = await sdk.info.getFrontendOpenOrders(cfg.wallet.address, true);
+      const coinPerp = `${cfg.market.coin}-PERP`;
+      const active = (oo || []).filter(o =>
+        (o.coin === cfg.market.coin || o.coin === coinPerp) && o.reduceOnly === true &&
+        (String(o.orderType || '').toLowerCase().includes('stop') || String(o.orderType || '').toLowerCase().includes('take profit') || o.tpsl === 'sl' || o.tpsl === 'tp')
+      );
+      if (active.length === 0) {
+        console.warn(nowIso(), 'TP/SL VERIFY: no trigger orders found on HL — forcing re-placement');
+        tauriEmit({ type: 'log', message: 'TP/SL orders missing on HL — re-placing...' });
+        state.exitsPlacedForPosKey = null;
+      }
+      state.lastTpslVerifyMs = Date.now();
+    } catch (e) { logWarn('tpsl-verify', e); }
   }
 
   const tpslStatus = await ensureNativeTpsl();
@@ -753,7 +816,7 @@ async function manageOpenPosition(pos){
         : null;
       const ev = { ts: nowIso(), action: 'CLOSE', side, sizeBtc: exitSz, entryPx: state.entryPx, exitPx, pnlUsd: pnlPartUsd, leader: 'signalbot', partial, tpIndex };
       fs.appendFileSync(TRADE_LOG, JSON.stringify(ev) + "\n");
-    } catch {}
+    } catch (e) { logErr('doClose-log', e); }
     return resp;
   }
 
@@ -809,7 +872,7 @@ async function manageOpenPosition(pos){
                   Math.abs(Number(o.triggerPx) - roundPx(cfg.market.coin, tp2Px)) < 1
                 );
                 if (tp2Orders.length){
-                  try { await sdk.exchange.cancelOrder(tp2Orders.map(o => ({ coin: coinPerp, o: o.oid }))); } catch {}
+                  try { await sdk.exchange.cancelOrder(tp2Orders.map(o => ({ coin: coinPerp, o: o.oid }))); } catch (e) { logWarn('tp2-cancel', e); }
                 }
                 await sdk.exchange.placeOrder({
                   coin: coinPerp,
@@ -823,7 +886,7 @@ async function manageOpenPosition(pos){
                 console.log(nowIso(), `TP2 promoted to chart: ${roundPx(cfg.market.coin, tp2Px)}`);
               }
             }
-          } catch {}
+          } catch (e) { logWarn('tp2-promote', e); }
         }
       }
 
@@ -855,7 +918,7 @@ async function manageOpenPosition(pos){
         }
       }
     }
-  } catch {}
+  } catch (e) { logErr('tp-detection', e); }
 
   // If native TP/SL triggers are active on HL, don't also do in-code TP closes.
   // Otherwise you can double-exit (trigger fires + bot marketClose) and accidentally flatten.
@@ -910,7 +973,7 @@ async function manageOpenPosition(pos){
         }
       }
     }
-  } catch {}
+  } catch (e) { logErr('s&f-trail', e); }
 
   // ---- Trailing stop (after TP2) ----
   try {
@@ -942,7 +1005,7 @@ async function manageOpenPosition(pos){
         }
       }
     }
-  } catch {}
+  } catch (e) { logErr('trailing-afterTp2', e); }
 
   // ---- EMA trend-break exit ----
   try {
@@ -978,7 +1041,7 @@ async function manageOpenPosition(pos){
             const ev = { ts: nowIso(), action: 'CLOSE', side, sizeBtc: exitSz, entryPx: state.entryPx, exitPx, pnlUsd, leader: 'signalbot', reason: `EMA${triggerPeriod} trend-break` };
             fs.appendFileSync(TRADE_LOG, JSON.stringify(ev) + "\n");
             if (pnlUsd !== null && pnlUsd < 0) state.lastLossAtMs = Date.now();
-          } catch {}
+          } catch (e) { logErr('emaTrendBreak-log', e); }
           state.lastExitAtMs = Date.now();
           state.activeSide = null;
           state.entryPx = null;
@@ -1026,7 +1089,7 @@ async function manageOpenPosition(pos){
         }
       }
     }
-  } catch {}
+  } catch (e) { logWarn('stopOut-orderCheck', e); }
 
   if (effectiveStopPx > 0 && ((side==='long' && px <= effectiveStopPx) || (side==='short' && px >= effectiveStopPx))){
     const closeResp = await sdk.custom.marketClose(`${cfg.market.coin}-PERP`).catch(()=>null);
@@ -1039,7 +1102,7 @@ async function manageOpenPosition(pos){
       const ev = { ts: nowIso(), action: 'CLOSE', side, sizeBtc: exitSz, entryPx: state.entryPx, exitPx, pnlUsd, leader: 'signalbot', partial: false, reason: 'stop_out' };
       fs.appendFileSync(TRADE_LOG, JSON.stringify(ev) + "\n");
       console.log(nowIso(), `Stop-out closed: ${side} ${exitSz} @ ${exitPx}, PnL: ${pnlUsd?.toFixed(2) ?? '?'}`);
-    } catch {}
+    } catch (e) { logErr('stopOut-log', e); }
 
     state.lastExitAtMs = Date.now();
     state.activeSide = null;
@@ -1080,7 +1143,7 @@ async function manageOpenPosition(pos){
           const ev = { ts: nowIso(), action: 'CLOSE', side, sizeBtc: exitSz, entryPx: state.entryPx, exitPx, pnlUsd, leader: 'signalbot', partial: false, reason: 'runner_exit' };
           fs.appendFileSync(TRADE_LOG, JSON.stringify(ev) + "\n");
           console.log(nowIso(), `Runner exit closed: ${side} ${exitSz} @ ${exitPx}, PnL: ${pnlUsd?.toFixed(2) ?? '?'}`);
-        } catch {}
+        } catch (e) { logErr('runnerExit-log', e); }
 
         state.lastExitAtMs = Date.now();
         state.activeSide = null;
@@ -1095,7 +1158,7 @@ async function manageOpenPosition(pos){
         persistState();
         return;
       }
-    } catch {}
+    } catch (e) { logErr('runnerExit', e); }
   }
 
   state.lastActionAt = Date.now();
@@ -1204,6 +1267,19 @@ async function tryEnter(){
   const equity = await spotUsdc();
   if (equity <= 0) return;
 
+  // Check available margin (equity minus what's already locked in positions)
+  let availableEquity = equity;
+  try {
+    const ch = await sdk.info.perpetuals.getClearinghouseState(cfg.wallet.address, true);
+    const totalMarginUsed = (ch?.assetPositions || []).reduce((s, p) => s + Math.abs(Number(p.position?.marginUsed || 0)), 0);
+    availableEquity = Math.max(0, equity - totalMarginUsed);
+    if (availableEquity < 1) {
+      console.log(nowIso(), `ENTRY_SKIP: insufficient available margin ($${availableEquity.toFixed(2)}, locked=$${totalMarginUsed.toFixed(2)})`);
+      tauriEmit({ type: 'log', message: `Entry skipped: insufficient margin (available $${availableEquity.toFixed(2)})` });
+      return;
+    }
+  } catch (e) { logWarn('marginCheck', e); }
+
   // Position sizing
   // Option A (default): risk-based sizing: notional = (equity * riskPerTradePct) / stopPct
   // Option B (if risk.marginUsePct is set): use a fixed fraction of equity as margin used.
@@ -1214,10 +1290,17 @@ async function tryEnter(){
 
   let cappedNotional;
   if (Number.isFinite(marginUsePct) && marginUsePct > 0 && marginUsePct <= 1 && Number.isFinite(levForSizing) && levForSizing > 0){
-    cappedNotional = equity * marginUsePct * levForSizing;
+    cappedNotional = availableEquity * marginUsePct * levForSizing;
   } else {
-    const { notional } = computeRiskSizedNotional({ equityUsd: equity, stopPct: sig.stopPct });
-    cappedNotional = Math.min(notional, equity * cfg.risk.maxLeverage);
+    const { notional } = computeRiskSizedNotional({ equityUsd: availableEquity, stopPct: sig.stopPct });
+    cappedNotional = Math.min(notional, availableEquity * cfg.risk.maxLeverage);
+  }
+
+  // Hard cap on position notional if configured
+  const maxNotional = Number(cfg?.risk?.maxPositionNotionalUsd ?? NaN);
+  if (Number.isFinite(maxNotional) && maxNotional > 0 && cappedNotional > maxNotional) {
+    console.log(nowIso(), `Notional capped: ${cappedNotional.toFixed(0)} → ${maxNotional.toFixed(0)} (maxPositionNotionalUsd)`);
+    cappedNotional = maxNotional;
   }
 
   const sz = cappedNotional / priceNow;
@@ -1258,8 +1341,8 @@ async function tryEnter(){
         SAF_ENABLED ? 'Trailing exit' : (tps || null),
       ].filter(Boolean).join(' | ');
       await tgSend(msg);
-    } catch {}
-  } catch {}
+    } catch (e) { logWarn('entry-tg', e); }
+  } catch (e) { logErr('entry-log', e); }
 
   // initialize plan
   state.activeSide = sig.side;
@@ -1301,7 +1384,7 @@ async function tryEnter(){
       const st = state.lastTpslStatus;
       if (st && st.okCount === 0 && st.wantCount > 0){
         console.error(nowIso(), 'FATAL: No TP/SL orders placed after 3 attempts; closing to avoid exposure', st);
-        try { await sdk.custom.marketClose(`${cfg.market.coin}-PERP`); } catch {}
+        try { await sdk.custom.marketClose(`${cfg.market.coin}-PERP`); } catch (e) { logErr('emergency-close', e); }
         state.lastExitAtMs = Date.now();
         state.activeSide = null;
         state.entryPx = null;
@@ -1318,7 +1401,7 @@ async function tryEnter(){
         console.warn(nowIso(), 'TP/SL partially placed — keeping position, will retry on next cycle', st);
       }
     }
-  } catch {}
+  } catch (e) { logErr('entry-tpsl', e); }
 
   state.lastActionAt = Date.now();
 }
@@ -1351,7 +1434,7 @@ async function mainLoop(){
         await getBtcPosition(); // emits equity + position snapshot
         state.lastActionAt = Date.now();
         persistState();
-      } catch {}
+      } catch (e) { logWarn('halted-refresh', e); }
       return;
     }
   }
@@ -1368,7 +1451,7 @@ async function mainLoop(){
     console.log(nowIso(), 'HALT: daily pnl', dp, 'below', -Math.abs(cfg.risk.maxDailyLossUsd));
     tauriEmit({ type: 'halt', reason: `daily pnl ${dp.toFixed(2)} below limit` });
     await cancelAllBtcOrders().catch(()=>{});
-    try { await sdk.custom.marketClose(`${cfg.market.coin}-PERP`); } catch {}
+    try { await sdk.custom.marketClose(`${cfg.market.coin}-PERP`); } catch (e) { logErr('halt-close', e); }
     persistState();
     return;
   }
@@ -1430,8 +1513,8 @@ async function mainLoop(){
           if (last.closedPnl !== undefined) hlPnl = Number(last.closedPnl);
         }
       }
-    } catch {}
-    if (!exitPx) { try { exitPx = await midPx(); } catch {} }
+    } catch (e) { logWarn('extClose-fills', e); }
+    if (!exitPx) { try { exitPx = await midPx(); } catch (e) { logWarn('extClose-midPx', e); } }
 
     // Prefer HL's reported P&L (includes fees, accurate) over local calculation
     const localPnl = (closeEntry && exitPx)
@@ -1447,7 +1530,7 @@ async function mainLoop(){
     try {
       const ev = { ts: nowIso(), action: 'CLOSE', side: closeSide, sizeBtc: exitSz, entryPx: closeEntry, exitPx, pnlUsd, hlPnl, hlFee, leader: 'signalbot', partial: false, reason: 'external_close' };
       fs.appendFileSync(TRADE_LOG, JSON.stringify(ev) + "\n");
-    } catch {}
+    } catch (e) { logErr('extClose-log', e); }
 
     console.log(nowIso(), `Position closed externally: ${closeSide} ${exitSz} @ ${exitPx || '?'}, PnL: ${pnlUsd?.toFixed(2) ?? '?'}${hlPnl !== null ? ' (from HL)' : ' (estimated)'}`);
     await cancelAllBtcOrders().catch(() => {});

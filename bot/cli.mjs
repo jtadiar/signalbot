@@ -136,7 +136,7 @@ try {
     const dotenv = await import('dotenv');
     dotenv.config({ path: envPath });
   }
-} catch {}
+} catch (e) { console.warn('dotenv load failed:', e?.message); }
 
 if (args.config) process.env.CONFIG = args.config;
 else process.env.CONFIG = process.env.CONFIG || path.join(DATA_DIR, 'config.json');

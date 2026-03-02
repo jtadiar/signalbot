@@ -1,6 +1,6 @@
 {
   "name": "hl-signalbot",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Hyperliquid BTC-PERP signal trading bot desktop app",
   "private": true,
   "type": "module",
@@ -9,7 +9,9 @@
     "build": "vite build",
     "tauri": "tauri",
     "bot:start": "node ./bot/cli.mjs",
-    "bot:setup": "node ./bot/cli.mjs setup"
+    "bot:setup": "node ./bot/cli.mjs setup",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -30,6 +32,7 @@
   "devDependencies": {
     "@tauri-apps/cli": "^2.10.0",
     "@vitejs/plugin-react": "^4.3.4",
-    "vite": "^6.2.0"
+    "vite": "^6.2.0",
+    "vitest": "^4.0.18"
   }
 }

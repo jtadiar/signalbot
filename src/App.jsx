@@ -5,6 +5,7 @@ import Setup from './pages/Setup';
 import Dashboard from './pages/Dashboard';
 import TradeLog from './pages/TradeLog';
 import Settings from './pages/Settings';
+import { version as APP_VERSION } from '../package.json';
 
 export default function App() {
   const [licensed, setLicensed] = useState(() => !!localStorage.getItem('license_key'));
@@ -84,7 +85,7 @@ export default function App() {
           </button>
         </div>
         <div className="sidebar-footer">
-          <span className="text-muted" style={{ fontSize: 11 }}>v1.0.0</span>
+          <span className="text-muted" style={{ fontSize: 11 }}>v{APP_VERSION}</span>
         </div>
       </nav>
       <main className="main">

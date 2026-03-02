@@ -10,6 +10,7 @@ export function ema(arr, period) {
 }
 
 export function computeSignal({ closes15m, closes1h, highs15m, lows15m, priceNow, cfg }){
+  if (!closes15m?.length || !closes1h?.length || !highs15m?.length || !lows15m?.length || !priceNow || !cfg) return null;
   const atr = (highs, lows, closes, period) => {
     if (!highs || !lows || !closes || highs.length < period+1) return null;
     const trs=[];
@@ -91,7 +92,7 @@ export function computeSignal({ closes15m, closes1h, highs15m, lows15m, priceNow
   }
 
   // ---- Filter 2: Stochastic RSI (reject overbought/oversold entries) ----
-  const stochEnabled = cfg?.signal?.stochFilter?.enabled !== false;
+  const stochEnabled = !!(cfg?.signal?.stochFilter?.enabled);
   const stochOverbought = Number(cfg?.signal?.stochFilter?.overbought ?? 80);
   const stochOversold = Number(cfg?.signal?.stochFilter?.oversold ?? 20);
   if (stochEnabled) {
