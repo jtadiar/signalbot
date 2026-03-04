@@ -6,7 +6,6 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-[[redirects]]
-  from = "/"
-  to = "/signalbot/home.html"
-  status = 200
+[[edge_functions]]
+  function = "home"
+  path = "/"

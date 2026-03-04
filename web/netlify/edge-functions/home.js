@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+const HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -32,16 +32,7 @@
       font-weight: 900;
       letter-spacing: -0.03em;
       line-height: 1;
-      background: linear-gradient(
-        180deg,
-        #e8e8ee 0%,
-        #c0c0c8 15%,
-        #f5f5f7 30%,
-        #8a8a95 50%,
-        #b8b8c2 65%,
-        #d5d5db 80%,
-        #9a9aa5 100%
-      );
+      background: linear-gradient(180deg, #e8e8ee 0%, #c0c0c8 15%, #f5f5f7 30%, #8a8a95 50%, #b8b8c2 65%, #d5d5db 80%, #9a9aa5 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -54,12 +45,7 @@
       font-weight: 900;
       letter-spacing: 0.35em;
       text-transform: uppercase;
-      background: linear-gradient(
-        180deg,
-        #b0b0b8 0%,
-        #7a7a85 50%,
-        #a0a0aa 100%
-      );
+      background: linear-gradient(180deg, #b0b0b8 0%, #7a7a85 50%, #a0a0aa 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -114,18 +100,9 @@
       box-shadow: 0 4px 24px rgba(0,0,0,0.3);
     }
 
-    .lock-icon {
-      width: 16px;
-      height: 16px;
-      opacity: 0.35;
-    }
+    .lock-icon { width: 16px; height: 16px; opacity: 0.35; }
 
-    .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
     .dot-live {
       background: #10b981;
@@ -133,10 +110,7 @@
       animation: pulse 2.5s ease-in-out infinite;
     }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
     .noise {
       position: fixed;
@@ -177,4 +151,10 @@
     </div>
   </div>
 </body>
-</html>
+</html>`;
+
+export default () => new Response(HTML, {
+  headers: { "content-type": "text/html; charset=utf-8" },
+});
+
+export const config = { path: "/" };
