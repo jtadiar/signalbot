@@ -47,7 +47,9 @@ export async function sendLicenseEmail(email: string, key: string): Promise<void
           <a href="https://github.com/c13studio/signalbot/releases/latest/download/HL.Signalbot_1.0.1_x64-setup.exe" style="display:inline-block;background:#333;color:#fff;font-weight:700;font-size:14px;padding:12px 24px;border-radius:999px;text-decoration:none;margin:0 6px 8px;">Download for Windows</a>
         </td></tr>
         <tr><td style="padding:24px 40px;border-top:1px solid #222;text-align:center;">
-          <p style="margin:0;font-size:11px;color:#444;">Save this email — you&rsquo;ll need this key if you reinstall.</p>
+          <p style="margin:0 0 16px;font-size:14px;color:#ccc;">Join our private Telegram for updates &amp; support:</p>
+          <a href="https://t.me/+Y9MLcLOMAdxiYzQ0" style="display:inline-block;background:#2AABEE;color:#fff;font-weight:700;font-size:14px;padding:10px 28px;border-radius:999px;text-decoration:none;">Join Telegram</a>
+          <p style="margin:16px 0 0;font-size:11px;color:#444;">Save this email — you&rsquo;ll need this key if you reinstall.</p>
         </td></tr>
       </table>
     </td></tr>

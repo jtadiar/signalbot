@@ -164,9 +164,29 @@ function SuccessContent() {
           )}
         </div>
 
+        {/* Telegram invite */}
+        <div className="mt-8 p-5 rounded-2xl border border-[#2AABEE]/20 bg-[#2AABEE]/[0.04] flex items-center gap-4">
+          <div className="w-10 h-10 rounded-full bg-[#2AABEE]/15 flex items-center justify-center shrink-0">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="#2AABEE">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.03-1.97 1.25-5.57 3.68-.53.36-1.01.54-1.43.53-.47-.01-1.38-.27-2.05-.49-.83-.27-1.49-.42-1.43-.88.03-.24.37-.49 1.02-.74 3.99-1.74 6.65-2.88 7.98-3.44 3.8-1.58 4.59-1.86 5.1-1.87.11 0 .37.03.54.17.14.12.18.28.2.45-.01.06.01.24 0 .37z" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-white mb-0.5">Join our private Telegram</p>
+            <p className="text-xs text-white/35">Get updates, support, and connect with other traders.</p>
+          </div>
+          <a
+            href="https://t.me/+Y9MLcLOMAdxiYzQ0"
+            target="_blank"
+            className="shrink-0 px-5 py-2.5 rounded-full bg-[#2AABEE] text-white font-semibold text-sm hover:brightness-110 transition-all"
+          >
+            Join
+          </a>
+        </div>
+
         <a
           href="/setup"
-          className="block w-full text-center mt-8 py-4 px-6 rounded-full bg-[var(--neon)] text-black font-bold text-lg hover:brightness-110 transition-all"
+          className="block w-full text-center mt-6 py-4 px-6 rounded-full bg-[var(--neon)] text-black font-bold text-lg hover:brightness-110 transition-all"
         >
           Setup Steps
         </a>
