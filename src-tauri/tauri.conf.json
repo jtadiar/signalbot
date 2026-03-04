@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "HL Signalbot",
   "version": "1.0.1",
-  "identifier": "com.hlsignalbot.app",
+  "identifier": "com.c13studio.hlsignalbot",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -40,6 +40,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "macOS": {
+      "signing": {
+        "identity": "-"
+      }
+    },
     "resources": {
       "../bot/cli.mjs": "bot/cli.mjs",
       "../bot/index.mjs": "bot/index.mjs",
