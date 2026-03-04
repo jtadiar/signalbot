@@ -1,11 +1,13 @@
 [build]
   base = "web"
-  command = "npm run build"
+  command = "npm run build && mkdir -p .next/static && cp home.html .next/home.html"
   publish = ".next"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-[[edge_functions]]
-  function = "home"
-  path = "/"
+[[redirects]]
+  from = "/"
+  to = "/home.html"
+  status = 200
+  force = true
