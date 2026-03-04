@@ -131,20 +131,18 @@ fn provision_bot_runtime(
 }
 
 fn find_npm(node_path: &str) -> Result<String, String> {
-    // npm is typically next to node
     let node = std::path::Path::new(node_path);
     if let Some(dir) = node.parent() {
-        let npm = dir.join("npm");
-        if npm.exists() {
-            return Ok(npm.to_string_lossy().to_string());
-        }
-        // Windows
+        // Check .cmd first — on Windows the bare `npm` file is a bash script
         let npm_cmd = dir.join("npm.cmd");
         if npm_cmd.exists() {
             return Ok(npm_cmd.to_string_lossy().to_string());
         }
+        let npm = dir.join("npm");
+        if npm.exists() {
+            return Ok(npm.to_string_lossy().to_string());
+        }
     }
-    // Fallback: just try "npm"
     Ok("npm".into())
 }
 
