@@ -49,8 +49,8 @@ export default function License({ onActivate }) {
         </button>
         <p style={{ marginTop: 16, fontSize: 12, color: 'var(--text-muted)' }}>
           Don&apos;t have a key?{' '}
-          <a href="https://hlsignalbot.netlify.app/#pricing" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
-            Buy one at hlsignalbot.netlify.app
+          <a href="https://c13studios.com/signalbot#pricing" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
+            Buy one at c13studios.com/signalbot
           </a>
         </p>
       </div>

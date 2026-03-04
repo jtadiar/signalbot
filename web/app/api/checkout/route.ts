@@ -7,7 +7,7 @@ function getStripe() {
   return new Stripe(key, { apiVersion: "2026-02-25.clover" });
 }
 
-const BASE_URL = process.env.NEXT_PUBLIC_URL || "https://hlsignalbot.netlify.app";
+const BASE_URL = process.env.NEXT_PUBLIC_URL || "https://c13studios.com/signalbot";
 
 export async function POST(req: NextRequest) {
   try {

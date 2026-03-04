@@ -5,3 +5,13 @@
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
+
+[[redirects]]
+  from = "/"
+  to = "/signalbot"
+  status = 302
+
+[[redirects]]
+  from = "/api/*"
+  to = "/signalbot/api/:splat"
+  status = 200
