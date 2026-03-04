@@ -95,7 +95,6 @@ fn provision_bot_runtime(
     std::fs::create_dir_all(target)
         .map_err(|e| format!("Cannot create bot runtime dir: {}", e))?;
 
-    // Copy all .mjs, .json, and .example files
     if let Ok(entries) = std::fs::read_dir(source) {
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().to_string();
@@ -109,13 +108,14 @@ fn provision_bot_runtime(
         }
     }
 
-    // Run npm install to get node_modules
+    // Run npm install via node — avoids PATH/shell issues in GUI app contexts
     let node = find_node()?;
-    let npm = find_npm(&node)?;
+    let npm_cli = find_npm_cli_js(&node)?;
 
-    let output = StdCommand::new(&npm)
+    let output = StdCommand::new(&node)
+        .arg(&npm_cli)
         .arg("install")
-        .arg("--production")
+        .arg("--omit=dev")
         .current_dir(target)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -124,26 +124,30 @@ fn provision_bot_runtime(
 
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("npm install failed: {}", err));
+        let out = String::from_utf8_lossy(&output.stdout);
+        return Err(format!("npm install failed:\n{}\n{}", err.trim(), out.trim()));
     }
 
     Ok(())
 }
 
-fn find_npm(node_path: &str) -> Result<String, String> {
+/// Find the npm CLI JavaScript entry point so we can run it via `node <npm-cli.js>`.
+/// This avoids shell/PATH issues on both macOS (GUI apps) and Windows (.cmd vs bash).
+fn find_npm_cli_js(node_path: &str) -> Result<String, String> {
     let node = std::path::Path::new(node_path);
-    if let Some(dir) = node.parent() {
-        // Check .cmd first — on Windows the bare `npm` file is a bash script
-        let npm_cmd = dir.join("npm.cmd");
-        if npm_cmd.exists() {
-            return Ok(npm_cmd.to_string_lossy().to_string());
+    if let Some(node_dir) = node.parent() {
+        // Standard Node.js install: <prefix>/lib/node_modules/npm/bin/npm-cli.js
+        let lib_cli = node_dir.join("../lib/node_modules/npm/bin/npm-cli.js");
+        if lib_cli.exists() {
+            return Ok(lib_cli.canonicalize().unwrap_or(lib_cli).to_string_lossy().to_string());
         }
-        let npm = dir.join("npm");
-        if npm.exists() {
-            return Ok(npm.to_string_lossy().to_string());
+        // Windows: node_modules sits next to node.exe
+        let win_cli = node_dir.join("node_modules/npm/bin/npm-cli.js");
+        if win_cli.exists() {
+            return Ok(win_cli.canonicalize().unwrap_or(win_cli).to_string_lossy().to_string());
         }
     }
-    Ok("npm".into())
+    Err("Cannot find npm. Ensure Node.js is installed from https://nodejs.org".into())
 }
 
 /// Writable directory for user config (outside the app bundle).

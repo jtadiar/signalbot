@@ -206,13 +206,11 @@ export default function Dashboard() {
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           fontSize: 13, fontWeight: 600,
         }}>
-          <span>
+          <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
             {/socket hang up|ECONNREFUSED|ETIMEDOUT|Gateway Timeout|503|504|ENOTFOUND|fetch failed/i.test(lastError)
               ? 'Connection error — Hyperliquid API is unreachable. Try restarting the bot.'
               : /EACCES|permission/i.test(lastError)
               ? 'Permission error — check your wallet key and try restarting.'
-              : lastError.length > 120
-              ? 'Something went wrong. Try restarting the bot.'
               : `Error: ${lastError}`}
           </span>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
