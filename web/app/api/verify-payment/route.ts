@@ -9,6 +9,7 @@ import {
 } from "viem";
 import { mainnet, base, arbitrum, polygon } from "viem/chains";
 import { createLicense } from "@/lib/license";
+import { sendLicenseEmail } from "@/lib/email";
 import { getStore } from "@netlify/blobs";
 
 const RECIPIENT: Address = "0x438b4CBA3aBEfb8Ea1588948187534E5f339cbE0";
@@ -128,13 +129,15 @@ export async function POST(req: NextRequest) {
 
     if (!verified) {
       return NextResponse.json(
-        { error: "Payment not found. Ensure you sent at least $29 USDC/USDT to the correct address." },
+        { error: "Payment not found. Ensure you sent at least £29 USDC/USDT to the correct address." },
         { status: 400 }
       );
     }
 
-    await markTxUsed(txHash, email.trim().toLowerCase());
-    const key = await createLicense(email.trim().toLowerCase());
+    const normalizedEmail = email.trim().toLowerCase();
+    await markTxUsed(txHash, normalizedEmail);
+    const key = await createLicense(normalizedEmail);
+    await sendLicenseEmail(normalizedEmail, key).catch(console.error);
 
     return NextResponse.json({ key });
   } catch (e: unknown) {

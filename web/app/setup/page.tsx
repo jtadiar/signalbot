@@ -181,7 +181,7 @@ export default function SetupPage() {
             <p className="text-white/50 text-sm mb-6">
               The installation guide and your unique license key will be provided after purchase.
             </p>
-            <a href="/#pricing" className="btn-primary">Get Access — $29</a>
+            <a href="/#pricing" className="btn-primary">Get Access — £29</a>
           </div>
         </div>
       </section>
@@ -241,7 +241,7 @@ export default function SetupPage() {
             Ready to <span className="text-[var(--neon)] neon-text-glow">start</span>?
           </h2>
           <p className="text-white/40 text-sm mb-8">Get your license key and follow the steps above.</p>
-          <a href="/#pricing" className="btn-primary text-lg">Get Access — $29</a>
+          <a href="/#pricing" className="btn-primary text-lg">Get Access — £29</a>
         </div>
       </section>
 

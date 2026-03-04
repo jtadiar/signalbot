@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createLicense } from "@/lib/license";
+import { sendLicenseEmail } from "@/lib/email";
 
 function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -32,7 +33,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No email found in session." }, { status: 400 });
     }
 
-    const key = await createLicense(email.trim().toLowerCase());
+    const normalizedEmail = email.trim().toLowerCase();
+    const key = await createLicense(normalizedEmail);
+    await sendLicenseEmail(normalizedEmail, key).catch(console.error);
     return NextResponse.json({ key });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Verification failed";

@@ -13,7 +13,7 @@ export const RECIPIENT: Address =
   "0x438b4CBA3aBEfb8Ea1588948187534E5f339cbE0";
 
 export const PRICE_RAW = BigInt(29_000_000); // 29 USDC/USDT (6 decimals)
-export const PRICE_DISPLAY = "$29";
+export const PRICE_DISPLAY = "£29";
 
 export const TOKEN_ADDRESSES: Record<
   number,

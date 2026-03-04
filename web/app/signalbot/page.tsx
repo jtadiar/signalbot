@@ -96,7 +96,7 @@ export default function Home() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-20">
-            <a href="#pricing" className="btn-primary text-lg">Get Started — $29</a>
+            <a href="#pricing" className="btn-primary text-lg">Get Started — £29</a>
             <a href="#features" className="btn-secondary text-lg">See Features</a>
           </div>
 
@@ -191,8 +191,8 @@ export default function Home() {
           <div className="card glow-neon !p-10 !border-[var(--neon)]/20">
             <div className="text-sm text-[var(--neon)] font-semibold uppercase tracking-wider mb-2">Signalbot License</div>
             <div className="flex items-baseline justify-center gap-3 mb-1">
-              <span className="text-3xl font-black text-white/25 line-through">$99</span>
-              <span className="text-5xl font-black text-[var(--neon)] neon-text-glow">$29</span>
+              <span className="text-3xl font-black text-white/25 line-through">£99</span>
+              <span className="text-5xl font-black text-[var(--neon)] neon-text-glow">£29</span>
             </div>
             <div className="text-white/40 font-medium text-sm mb-8">One-time payment</div>
 
@@ -232,9 +232,9 @@ export default function Home() {
               { q: "What do I need to run the bot?", a: "Node.js and Rust (both free, quick installs), plus a Hyperliquid account with USDC deposited. After getting your key, you'll see step-by-step install instructions." },
               { q: "Can I customize the trading strategy?", a: "Yes. Every parameter is configurable: TP distances, trailing stop tightness, leverage, risk per trade, signal sensitivity, cooldowns, and more. See the CONFIGURATION.md guide." },
               { q: "Does it work on Mac and Windows?", a: "Yes. The CLI runs on any platform with Node.js — macOS, Windows, and Linux." },
-              { q: "How much does it cost?", a: "Signalbot is a one-time $29 payment in USDC or USDT. No subscriptions, no recurring fees. Pay on Ethereum, Base, Arbitrum, or Polygon." },
+              { q: "How much does it cost?", a: "Signalbot is a one-time £29 payment. No subscriptions, no recurring fees. Pay with card or crypto (USDC/USDT on Ethereum, Base, Arbitrum, or Polygon)." },
               { q: "What pairs does it trade?", a: "Currently BTC-PERP on Hyperliquid. Additional pairs may be added in future updates." },
-              { q: "How do I get my license key?", a: "Enter your email, connect your wallet, and pay $29 USDC or USDT. Once the transaction confirms on-chain, your license key is generated instantly." },
+              { q: "How do I get my license key?", a: "Enter your email, choose card or crypto, and pay £29. Your license key is generated instantly after payment." },
             ].map((faq) => (
               <div key={faq.q} className="card">
                 <h3 className="font-semibold mb-2 italic">{faq.q}</h3>

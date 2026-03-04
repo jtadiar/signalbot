@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
       line_items: [
         {
           price_data: {
-            currency: "usd",
+            currency: "gbp",
             product_data: { name: "Signalbot License" },
             unit_amount: 2900,
           },
