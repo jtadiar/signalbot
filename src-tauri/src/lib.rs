@@ -134,17 +134,21 @@ fn provision_bot_runtime(
 /// Find the npm CLI JavaScript entry point so we can run it via `node <npm-cli.js>`.
 /// This avoids shell/PATH issues on both macOS (GUI apps) and Windows (.cmd vs bash).
 fn find_npm_cli_js(node_path: &str) -> Result<String, String> {
-    let node = std::path::Path::new(node_path);
-    if let Some(node_dir) = node.parent() {
-        // Standard Node.js install: <prefix>/lib/node_modules/npm/bin/npm-cli.js
-        let lib_cli = node_dir.join("../lib/node_modules/npm/bin/npm-cli.js");
-        if lib_cli.exists() {
-            return Ok(lib_cli.canonicalize().unwrap_or(lib_cli).to_string_lossy().to_string());
-        }
-        // Windows: node_modules sits next to node.exe
-        let win_cli = node_dir.join("node_modules/npm/bin/npm-cli.js");
-        if win_cli.exists() {
-            return Ok(win_cli.canonicalize().unwrap_or(win_cli).to_string_lossy().to_string());
+    let node_raw = std::path::Path::new(node_path);
+    // Resolve symlinks so relative paths (../lib/...) land in the right place.
+    // dunce::canonicalize avoids the \\?\ prefix that std::fs::canonicalize adds on Windows.
+    let node_resolved = dunce::canonicalize(node_raw).unwrap_or_else(|_| node_raw.to_path_buf());
+
+    for node in &[node_resolved.as_path(), node_raw] {
+        if let Some(node_dir) = node.parent() {
+            let lib_cli = node_dir.join("../lib/node_modules/npm/bin/npm-cli.js");
+            if lib_cli.exists() {
+                return Ok(dunce::canonicalize(&lib_cli).unwrap_or(lib_cli).to_string_lossy().to_string());
+            }
+            let win_cli = node_dir.join("node_modules/npm/bin/npm-cli.js");
+            if win_cli.exists() {
+                return Ok(dunce::canonicalize(&win_cli).unwrap_or(win_cli).to_string_lossy().to_string());
+            }
         }
     }
     Err("Cannot find npm. Ensure Node.js is installed from https://nodejs.org".into())
