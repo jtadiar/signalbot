@@ -75,7 +75,36 @@ for (const file of ['config.json', 'trades.jsonl', 'state.json', '.env']) {
 }
 const CONFIG_PATH = process.env.CONFIG || path.join(DATA_DIR, 'config.json');
 const TRADE_LOG = process.env.TRADE_LOG || path.join(DATA_DIR, 'trades.jsonl');
-const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+
+let cfg;
+try {
+  const raw = fs.readFileSync(CONFIG_PATH, 'utf8');
+  cfg = JSON.parse(raw);
+} catch (e) {
+  if (e.code === 'ENOENT') {
+    console.error(`[FATAL] Config file not found: ${CONFIG_PATH}`);
+    console.error('  Run the setup wizard first, or check that your config path is correct.');
+  } else if (e instanceof SyntaxError) {
+    console.error(`[FATAL] Invalid JSON in config: ${CONFIG_PATH}`);
+    console.error(' ', e.message);
+  } else {
+    console.error(`[FATAL] Cannot read config: ${e.message}`);
+  }
+  process.exit(1);
+}
+
+if (!cfg.wallet) cfg.wallet = {};
+if (!cfg.risk) cfg.risk = {};
+if (!cfg.signal) cfg.signal = {};
+if (!cfg.exits) cfg.exits = {};
+if (!cfg.market) cfg.market = {};
+if (!cfg.display) cfg.display = {};
+
+cfg.risk.cooldownSeconds = cfg.risk.cooldownSeconds ?? 5;
+cfg.risk.maxLeverage = cfg.risk.maxLeverage ?? 5;
+cfg.risk.maxDailyLossUsd = cfg.risk.maxDailyLossUsd ?? 100;
+cfg.signal.pollMs = cfg.signal.pollMs ?? 20000;
+cfg.market.coin = cfg.market.coin || 'BTC';
 
 // ---- Set & Forget mode override ----
 const SAF_ENABLED = !!(cfg.setAndForget && String(cfg.setAndForget.enabled).toLowerCase() !== 'false');
@@ -143,11 +172,20 @@ const pk = (
 );
 
 if (!cfg?.wallet?.address) {
-  console.error('Missing wallet address. Set wallet.address in config.json or HL_WALLET_ADDRESS in env.');
+  console.error('[FATAL] Missing wallet address.');
+  console.error('  Set wallet.address in config.json or HL_WALLET_ADDRESS in env.');
+  console.error('  Config path:', CONFIG_PATH);
   process.exit(1);
 }
 if (!pk) {
-  console.error('Missing private key. Set HL_PRIVATE_KEY or HL_PRIVATE_KEY_PATH in env (recommended), or wallet.privateKeyPath in config.json.');
+  const keyPath = cfg?.wallet?.privateKeyPath || '(not set)';
+  console.error('[FATAL] Missing private key.');
+  console.error('  wallet.privateKeyPath in config:', keyPath);
+  if (keyPath !== '(not set)') {
+    const resolved = expandHome(String(keyPath).trim());
+    console.error('  File exists:', fs.existsSync(resolved) ? 'yes' : 'NO — file not found');
+  }
+  console.error('  Set HL_PRIVATE_KEY or HL_PRIVATE_KEY_PATH in env, or wallet.privateKeyPath in config.json.');
   process.exit(1);
 }
 

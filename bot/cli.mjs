@@ -1,5 +1,14 @@
 #!/usr/bin/env node
 
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] Uncaught exception:', err?.stack || err?.message || err);
+  process.exit(1);
+});
+process.on('unhandledRejection', (err) => {
+  console.error('[FATAL] Unhandled rejection:', err?.stack || err?.message || err);
+  process.exit(1);
+});
+
 import fs from 'fs';
 import path from 'path';
 import { homedir } from 'os';
@@ -141,5 +150,9 @@ try {
 if (args.config) process.env.CONFIG = args.config;
 else process.env.CONFIG = process.env.CONFIG || path.join(DATA_DIR, 'config.json');
 
-// Load the runner (it reads CONFIG/env at import time)
-await import('./index.mjs');
+try {
+  await import('./index.mjs');
+} catch (err) {
+  console.error('[FATAL] Bot failed to start:', err?.stack || err?.message || err);
+  process.exit(1);
+}

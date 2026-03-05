@@ -26,6 +26,10 @@ impl Default for BotState {
 
 // --- Path Resolution ---
 
+fn app_version(app: &tauri::AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+
 fn find_bot_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     // 1. Dev mode: project root bot/ with node_modules already installed
     if let Ok(cwd) = std::env::current_dir() {
@@ -41,13 +45,30 @@ fn find_bot_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     let runtime_dir = user_data_dir()?.join("bot");
     let has_runtime = runtime_dir.join("index.mjs").exists() && runtime_dir.join("node_modules").exists();
 
-    // Always re-copy .mjs files from the bundle so app updates propagate.
-    // Only run full npm install if node_modules is missing.
+    let current_version = app_version(app);
+    let version_file = runtime_dir.join(".bot-version");
+    let version_matches = version_file.exists()
+        && std::fs::read_to_string(&version_file)
+            .unwrap_or_default()
+            .trim()
+            == current_version;
+
     if let Ok(resource_bot) = find_resource_bot_dir(app) {
-        if has_runtime {
+        if has_runtime && version_matches {
+            // Same version — just sync scripts (handles code-only hot-patches)
             sync_bot_scripts(&resource_bot, &runtime_dir);
         } else {
+            // Version changed or fresh install — full re-provision
+            if has_runtime && !version_matches {
+                log::info!(
+                    "App version changed (was {:?}, now {}) — re-provisioning bot runtime",
+                    std::fs::read_to_string(&version_file).ok().map(|s| s.trim().to_string()),
+                    &current_version
+                );
+                let _ = std::fs::remove_dir_all(runtime_dir.join("node_modules"));
+            }
             provision_bot_runtime(&resource_bot, &runtime_dir)?;
+            let _ = std::fs::write(&version_file, &current_version);
         }
     } else if !has_runtime {
         return Err("Cannot locate bundled bot files. Reinstall the app.".into());
@@ -553,13 +574,14 @@ fn start_bot(app: tauri::AppHandle, state: State<BotState>) -> Result<(), String
             let mut error_lines: Vec<String> = Vec::new();
             for line in reader.lines().flatten() {
                 error_lines.push(line.clone());
-                let escaped = line.replace('\\', "\\\\").replace('"', "\\\"");
-                let _ = h.emit("bot-event", &format!("{{\"type\":\"log\",\"message\":\"{}\"}}", escaped));
+                let event = serde_json::json!({"type": "log", "message": line});
+                let _ = h.emit("bot-event", &event.to_string());
             }
             if !error_lines.is_empty() {
-                let full = error_lines.join(" | ").replace('\\', "\\\\").replace('"', "\\\"");
-                let _ = h.state::<BotState>().last_error.lock().map(|mut e| *e = Some(error_lines.join("\n")));
-                let _ = h.emit("bot-event", &format!("{{\"type\":\"error\",\"message\":\"{}\"}}", full));
+                let full = error_lines.join("\n");
+                let _ = h.state::<BotState>().last_error.lock().map(|mut e| *e = Some(full.clone()));
+                let event = serde_json::json!({"type": "error", "message": full});
+                let _ = h.emit("bot-event", &event.to_string());
             }
         });
     }
@@ -575,7 +597,16 @@ fn start_bot(app: tauri::AppHandle, state: State<BotState>) -> Result<(), String
                 match c.try_wait() {
                     Ok(Some(status)) => {
                         let code = status.code().unwrap_or(-1);
-                        let _ = h2.emit("bot-event", &format!("{{\"type\":\"stopped\",\"code\":{}}}", code));
+                        // Give stderr thread time to flush before emitting stopped
+                        std::thread::sleep(std::time::Duration::from_millis(300));
+                        if code != 0 {
+                            let err_msg = st.last_error.lock().unwrap().clone();
+                            let msg = err_msg.unwrap_or_else(|| format!("Bot process exited with code {}", code));
+                            let event = serde_json::json!({"type": "error", "message": msg});
+                            let _ = h2.emit("bot-event", &event.to_string());
+                        }
+                        let event = serde_json::json!({"type": "stopped", "code": code});
+                        let _ = h2.emit("bot-event", &event.to_string());
                         *st.running.lock().unwrap() = false;
                         *child_lock = None;
                         break;

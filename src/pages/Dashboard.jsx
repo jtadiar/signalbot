@@ -56,6 +56,9 @@ export default function Dashboard() {
         case 'stopped':
           setRunning(false);
           setStatus('stopped');
+          if (event.code && event.code !== 0) {
+            setLastError(prev => prev || `Bot crashed (exit code ${event.code}). Check logs below for details.`);
+          }
           break;
         case 'position':
           setPosition(event.data);
@@ -442,12 +445,14 @@ export default function Dashboard() {
         )}
 
         {logs.length > 0 && (
-          <details style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+          <details open={!!lastError || status === 'stopped'} style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
             <summary className="text-muted" style={{ fontSize: 12, cursor: 'pointer', userSelect: 'none' }}>
               Logs ({logs.length})
             </summary>
-            <div style={{ maxHeight: 160, overflowY: 'auto', fontFamily: 'monospace', fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.5, marginTop: 8 }}>
-              {logs.map((l, i) => <div key={i}>{l}</div>)}
+            <div style={{ maxHeight: 200, overflowY: 'auto', fontFamily: 'monospace', fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.5, marginTop: 8 }}>
+              {logs.map((l, i) => (
+                <div key={i} style={/\[FATAL\]|Error|FATAL/.test(l) ? { color: 'var(--red)', fontWeight: 600 } : undefined}>{l}</div>
+              ))}
             </div>
           </details>
         )}
