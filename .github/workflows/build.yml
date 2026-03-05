@@ -79,11 +79,14 @@ jobs:
           mkdir -p src-tauri/binaries
           curl -sL "https://nodejs.org/dist/${NODE_VER}/node-${NODE_VER}-darwin-arm64.tar.gz" \
             | tar xz --strip-components=2 -C /tmp "node-${NODE_VER}-darwin-arm64/bin/node"
-          mv /tmp/node src-tauri/binaries/node-aarch64-apple-darwin
+          mv /tmp/node src-tauri/binaries/node-arm64
           curl -sL "https://nodejs.org/dist/${NODE_VER}/node-${NODE_VER}-darwin-x64.tar.gz" \
             | tar xz --strip-components=2 -C /tmp "node-${NODE_VER}-darwin-x64/bin/node"
-          mv /tmp/node src-tauri/binaries/node-x86_64-apple-darwin
-          chmod +x src-tauri/binaries/node-*
+          mv /tmp/node src-tauri/binaries/node-x64
+          lipo -create src-tauri/binaries/node-arm64 src-tauri/binaries/node-x64 \
+            -output src-tauri/binaries/node-universal-apple-darwin
+          rm src-tauri/binaries/node-arm64 src-tauri/binaries/node-x64
+          chmod +x src-tauri/binaries/node-universal-apple-darwin
           ls -lh src-tauri/binaries/
 
       - name: Download Node.js sidecar (Windows)
