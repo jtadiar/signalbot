@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "HL Signalbot",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "identifier": "com.c13studio.hlsignalbot",
   "build": {
     "frontendDist": "../dist",
@@ -33,6 +33,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "externalBin": ["binaries/node"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -51,7 +52,8 @@
       "../bot/config.example.json": "bot/config.example.json",
       "../bot/.env.example": "bot/.env.example",
       "../bot/package.json": "bot/package.json",
-      "../bot/package-lock.json": "bot/package-lock.json"
+      "../bot/package-lock.json": "bot/package-lock.json",
+      "../bot/node_modules.tar.gz": "bot/node_modules.tar.gz"
     }
   },
   "plugins": {

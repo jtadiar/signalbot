@@ -6,6 +6,10 @@ bot/node_modules/
 dist/
 src-tauri/target/
 src-tauri/Cargo.lock
+src-tauri/binaries/
+
+# bundled bot deps (created during CI)
+bot/node_modules.tar.gz
 
 # runtime state / logs
 bot/state.json

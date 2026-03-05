@@ -59,18 +59,60 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           npm install
-          cd bot && npm install && cd ..
+          cd bot && npm install --omit=dev && cd ..
 
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
         run: |
           npm install
           cd bot
-          npm install
+          npm install --omit=dev
           cd ..
 
       - name: Install Tauri CLI
         run: npm install -g @tauri-apps/cli
+
+      - name: Download Node.js sidecar (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          NODE_VER=$(node --version)
+          mkdir -p src-tauri/binaries
+          curl -sL "https://nodejs.org/dist/${NODE_VER}/node-${NODE_VER}-darwin-arm64.tar.gz" \
+            | tar xz --strip-components=2 -C /tmp "node-${NODE_VER}-darwin-arm64/bin/node"
+          mv /tmp/node src-tauri/binaries/node-aarch64-apple-darwin
+          curl -sL "https://nodejs.org/dist/${NODE_VER}/node-${NODE_VER}-darwin-x64.tar.gz" \
+            | tar xz --strip-components=2 -C /tmp "node-${NODE_VER}-darwin-x64/bin/node"
+          mv /tmp/node src-tauri/binaries/node-x86_64-apple-darwin
+          chmod +x src-tauri/binaries/node-*
+          ls -lh src-tauri/binaries/
+
+      - name: Download Node.js sidecar (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $NODE_VER = (node --version)
+          New-Item -ItemType Directory -Force -Path src-tauri/binaries | Out-Null
+          $url = "https://nodejs.org/dist/$NODE_VER/node-$NODE_VER-win-x64.zip"
+          Invoke-WebRequest -Uri $url -OutFile node-win.zip
+          Expand-Archive -Path node-win.zip -DestinationPath node-extract -Force
+          Copy-Item "node-extract/node-$NODE_VER-win-x64/node.exe" "src-tauri/binaries/node-x86_64-pc-windows-msvc.exe"
+          Remove-Item node-win.zip, node-extract -Recurse -Force
+          Get-ChildItem src-tauri/binaries/
+
+      - name: Bundle bot node_modules (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cd bot
+          tar czf node_modules.tar.gz node_modules
+          ls -lh node_modules.tar.gz
+
+      - name: Bundle bot node_modules (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cd bot
+          tar czf node_modules.tar.gz node_modules
+          Get-ChildItem node_modules.tar.gz
 
       - name: Import Apple signing certificate
         if: runner.os == 'macOS'

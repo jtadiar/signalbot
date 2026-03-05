@@ -108,7 +108,25 @@ fn provision_bot_runtime(
         }
     }
 
-    // Run npm install via node — avoids PATH/shell issues in GUI app contexts
+    // Try extracting pre-bundled node_modules tarball first (no npm needed)
+    let tarball = source.join("node_modules.tar.gz");
+    if tarball.exists() {
+        let output = StdCommand::new("tar")
+            .args(["xzf", &tarball.to_string_lossy()])
+            .current_dir(target)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .map_err(|e| format!("Failed to extract node_modules: {}", e))?;
+
+        if output.status.success() && target.join("node_modules").exists() {
+            return Ok(());
+        }
+        let err = String::from_utf8_lossy(&output.stderr);
+        log::warn!("Tarball extraction failed, falling back to npm install: {}", err.trim());
+    }
+
+    // Fallback: run npm install (dev mode or if tarball is missing)
     let node = find_node()?;
     let npm_cli = find_npm_cli_js(&node)?;
 
@@ -190,6 +208,26 @@ fn bot_config_dir(_app: &tauri::AppHandle) -> Result<std::path::PathBuf, String>
 // --- Node.js Runtime ---
 
 fn find_node() -> Result<String, String> {
+    // Prefer the bundled Node.js sidecar (next to our own executable)
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            #[cfg(not(target_os = "windows"))]
+            let node_name = "node";
+            #[cfg(target_os = "windows")]
+            let node_name = "node.exe";
+
+            let bundled = dir.join(node_name);
+            if bundled.exists() {
+                if let Ok(canon) = dunce::canonicalize(&bundled) {
+                    if canon != exe {
+                        return Ok(canon.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: search system Node.js (for dev mode)
     let mut candidates: Vec<String> = Vec::new();
 
     #[cfg(not(target_os = "windows"))]
