@@ -32,7 +32,7 @@ export async function sendLicenseKeyEmail(email, licenseKey, plan) {
         <div style="background: #1f2937; border-radius: 8px; padding: 24px; margin-bottom: 24px;">
           <h3 style="color: #e5e7eb; margin: 0 0 12px 0; font-size: 16px;">Getting Started</h3>
           <ol style="color: #9ca3af; font-size: 14px; padding-left: 20px; margin: 0;">
-            <li style="margin-bottom: 8px;">Download for <a href="https://c13studios.com/downloads/signalbot-mac.dmg" style="color: #10b981;">Mac</a> or <a href="https://c13studios.com/downloads/signalbot-windows.exe" style="color: #10b981;">Windows</a></li>
+            <li style="margin-bottom: 8px;">Download for <a href="https://c13studios.com/download/mac" style="color: #10b981;">Mac</a> or <a href="https://c13studios.com/download/windows" style="color: #10b981;">Windows</a></li>
             <li style="margin-bottom: 8px;">Open the app and enter your license key above</li>
             <li style="margin-bottom: 8px;">Follow the setup wizard to connect your Hyperliquid account</li>
             <li>Start the bot and monitor your trades from the dashboard</li>

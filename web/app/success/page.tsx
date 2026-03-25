@@ -4,8 +4,8 @@ import { useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
 
 const GITHUB_REPO = "c13studio/signalbot";
-const DMG_URL = "/downloads/signalbot-mac.dmg";
-const EXE_URL = "/downloads/signalbot-windows.exe";
+const DMG_URL = "/download/mac";
+const EXE_URL = "/download/windows";
 
 function SuccessContent() {
   const params = useSearchParams();
