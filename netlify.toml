@@ -6,7 +6,19 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# Old versioned download URLs → redirect to stable route handlers
+# Stable download redirects → route handlers that resolve to current version
+[[redirects]]
+  from = "/downloads/signalbot-mac.dmg"
+  to = "/download/mac"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/downloads/signalbot-windows.exe"
+  to = "/download/windows"
+  status = 302
+  force = true
+
 [[redirects]]
   from = "/downloads/HL.Signalbot_*_universal.dmg"
   to = "/download/mac"
