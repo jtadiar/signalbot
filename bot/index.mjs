@@ -406,9 +406,17 @@ function roundPx(coin, px){
 }
 
 async function spotUsdc(){
+  // Hyperliquid unified accounts split USDC between two coin tickers:
+  //   - 'USDC'       (legacy / spot)
+  //   - 'USDC:USDC'  (unified / perp-side)
+  // Total portfolio value = sum of both. Matching only 'USDC' undersizes
+  // positions on unified accounts.
   const spot = await spotClearinghouseState(cfg.wallet.address);
-  const usdc = (spot?.balances||[]).find(b=>b.coin==='USDC');
-  return Number(usdc?.total ?? 0);
+  const total = (spot?.balances || []).reduce((s, b) => {
+    if (b.coin === 'USDC' || b.coin === 'USDC:USDC') return s + Number(b.total || 0);
+    return s;
+  }, 0);
+  return Number.isFinite(total) ? total : 0;
 }
 
 async function dailyPnl(){
@@ -1327,14 +1335,16 @@ async function tryEnter(){
   const levForSizing = Number(cfg?.risk?.maxLeverage ?? NaN);
 
   let cappedNotional;
+  let sizingMode;
   if (Number.isFinite(marginUsePct) && marginUsePct > 0 && marginUsePct <= 1 && Number.isFinite(levForSizing) && levForSizing > 0){
     cappedNotional = availableEquity * marginUsePct * levForSizing;
+    sizingMode = `marginUse=${(marginUsePct * 100).toFixed(0)}% @ ${levForSizing}x`;
   } else {
     const { notional } = computeRiskSizedNotional({ equityUsd: availableEquity, stopPct: sig.stopPct });
     cappedNotional = Math.min(notional, availableEquity * cfg.risk.maxLeverage);
+    sizingMode = `riskPerTrade=${((cfg.risk?.riskPerTradePct ?? 0.01) * 100).toFixed(1)}%`;
   }
 
-  // Hard cap on position notional if configured
   const maxNotional = Number(cfg?.risk?.maxPositionNotionalUsd ?? NaN);
   if (Number.isFinite(maxNotional) && maxNotional > 0 && cappedNotional > maxNotional) {
     console.log(nowIso(), `Notional capped: ${cappedNotional.toFixed(0)} → ${maxNotional.toFixed(0)} (maxPositionNotionalUsd)`);
@@ -1344,7 +1354,7 @@ async function tryEnter(){
   const sz = cappedNotional / priceNow;
   if (sz <= 0) return;
 
-  console.log(nowIso(), 'Signal', sig.side, 'enter notional', cappedNotional.toFixed(2), 'stopPct', sig.stopPct.toFixed(4), sig.reason);
+  console.log(nowIso(), 'Signal', sig.side, 'enter notional=$' + cappedNotional.toFixed(2), 'equity=$' + availableEquity.toFixed(2), 'sizing=' + sizingMode, 'stopPct=' + sig.stopPct.toFixed(4), sig.reason);
   tauriEmit({ type: 'signal', side: sig.side, reason: sig.reason, notional: cappedNotional, stopPct: sig.stopPct });
   await ensureLeverage();
   const resp = await placeMarket(sig.side, sz);

@@ -20,6 +20,14 @@ export default function Settings() {
   const [error, setError] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
 
+  // Wallet state
+  const [walletAddress, setWalletAddress] = useState('');
+  const [newPrivateKey, setNewPrivateKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
+  const [walletSaving, setWalletSaving] = useState(false);
+  const [walletSaved, setWalletSaved] = useState(false);
+  const [walletError, setWalletError] = useState('');
+
   // Telegram state
   const [tgEnabled, setTgEnabled] = useState(false);
   const [tgToken, setTgToken] = useState('');
@@ -36,7 +44,7 @@ export default function Settings() {
     const cfg = await readConfig();
     if (cfg) {
       setConfig(cfg);
-      // Hydrate telegram fields
+      if (cfg.wallet?.address) setWalletAddress(cfg.wallet.address);
       if (cfg.telegram) {
         setTgEnabled(cfg.telegram.enabled === true || String(cfg.telegram.enabled) === 'true');
         setTgChat(cfg.telegram.channel || '');
@@ -47,6 +55,7 @@ export default function Settings() {
         if (stored) {
           const parsed = JSON.parse(stored);
           setConfig(parsed);
+          if (parsed.wallet?.address) setWalletAddress(parsed.wallet.address);
           if (parsed.telegram) {
             setTgEnabled(parsed.telegram.enabled === true);
             setTgChat(parsed.telegram.channel || '');
@@ -205,6 +214,62 @@ export default function Settings() {
     return t.slice(0, 6) + '••••••' + t.slice(-4);
   }
 
+  async function handleWalletSave() {
+    setWalletSaving(true);
+    setWalletError('');
+    setWalletSaved(false);
+    const addr = walletAddress.trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) {
+      setWalletError('Invalid address. Must be 0x followed by 40 hex characters.');
+      setWalletSaving(false);
+      return;
+    }
+    if (newPrivateKey.trim() && !/^(0x)?[a-fA-F0-9]{64}$/.test(newPrivateKey.trim())) {
+      setWalletError('Invalid private key. Must be a 64-character hex string (with optional 0x prefix).');
+      setWalletSaving(false);
+      return;
+    }
+    try {
+      const configDir = await invoke('get_config_dir');
+      const keyPath = `${configDir}/private_key`;
+
+      const cfg = await readConfig();
+      if (!cfg.wallet) cfg.wallet = {};
+      cfg.wallet.address = addr;
+      cfg.wallet.privateKeyPath = keyPath;
+      await writeConfig(cfg);
+      setConfig(cfg);
+
+      if (newPrivateKey.trim()) {
+        const key = newPrivateKey.trim().replace(/^0x/, '');
+        await invoke('write_secret_file', { path: keyPath, contents: key + '\n' });
+      }
+
+      try {
+        const envContents = await invoke('read_bot_file', { filename: '.env' });
+        const lines = envContents.split('\n');
+        const filtered = lines.filter(l =>
+          !l.startsWith('HL_WALLET_ADDRESS=') &&
+          !l.startsWith('HL_PRIVATE_KEY_PATH=') &&
+          !l.startsWith('HL_PRIVATE_KEY=')
+        );
+        filtered.push('', `HL_WALLET_ADDRESS=${addr}`);
+        filtered.push(`HL_PRIVATE_KEY_PATH=${keyPath}`);
+        filtered.push('');
+        await invoke('write_bot_file', { filename: '.env', contents: filtered.join('\n') });
+      } catch {}
+
+      localStorage.setItem('bot_config', JSON.stringify(cfg));
+      setNewPrivateKey('');
+      setWalletSaved(true);
+      setShowRestartNotice(true);
+      setTimeout(() => setWalletSaved(false), 3000);
+    } catch (e) {
+      setWalletError(e?.message || 'Failed to save wallet settings.');
+    }
+    setWalletSaving(false);
+  }
+
   if (loading) return <div className="text-muted">Loading...</div>;
   if (!config) return <div className="text-muted">No configuration found. Run setup first.</div>;
 
@@ -227,6 +292,18 @@ export default function Settings() {
           }}
         >
           Configure
+        </button>
+        <button
+          className={`settings-tab ${tab === 'wallet' ? 'active' : ''}`}
+          onClick={() => setTab('wallet')}
+          style={{
+            padding: '10px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            background: 'none', border: 'none', borderBottom: tab === 'wallet' ? '2px solid var(--accent)' : '2px solid transparent',
+            color: tab === 'wallet' ? 'var(--accent)' : 'var(--text-secondary)',
+            transition: 'all 0.15s',
+          }}
+        >
+          Wallet
         </button>
         <button
           className={`settings-tab ${tab === 'telegram' ? 'active' : ''}`}
@@ -730,6 +807,87 @@ export default function Settings() {
           <div className="card-title" style={{ color: 'var(--red)' }}>Danger Zone</div>
           <button className="btn btn-outline" onClick={handleReset} style={{ borderColor: 'var(--red)', color: 'var(--red)' }}>Reset All Settings &amp; Re-run Setup</button>
           <div className="form-hint" style={{ marginTop: 8 }}>This clears your local configuration. Your license key, private key files, and Telegram tokens on disk are not deleted.</div>
+        </div>
+      </div>
+
+      {/* Wallet tab */}
+      <div style={{ display: tab === 'wallet' ? 'block' : 'none' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 16 }}>
+          {walletSaved && <span className="success-msg">Saved!</span>}
+          {walletError && <span className="error-msg">{walletError}</span>}
+          <button className="btn btn-primary" onClick={handleWalletSave} disabled={walletSaving}>
+            {walletSaving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-title">Current Wallet</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{
+              width: 10, height: 10, borderRadius: '50%',
+              background: walletAddress ? 'var(--green)' : 'var(--text-muted)',
+            }} />
+            <span className="mono" style={{ fontWeight: 600, fontSize: 13 }}>
+              {walletAddress || 'No wallet configured'}
+            </span>
+          </div>
+        </div>
+
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-title">Wallet Address</div>
+          <div className="form-group">
+            <label className="form-label">Hyperliquid wallet address</label>
+            <input
+              className="form-input mono"
+              placeholder="0x..."
+              value={walletAddress}
+              onChange={e => setWalletAddress(e.target.value)}
+            />
+            <div className="form-hint">The address shown in the top-right of the Hyperliquid app</div>
+          </div>
+        </div>
+
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-title">Private Key</div>
+          <div style={{
+            padding: 10, borderRadius: 8, marginBottom: 14,
+            background: 'rgba(255, 107, 0, 0.08)', border: '1px solid rgba(255, 107, 0, 0.15)',
+            fontSize: 11, color: '#f97316', lineHeight: 1.5,
+          }}>
+            Your private key is stored locally and never uploaded. Only fill this field if you want to replace the current key. Leave it blank to keep the existing one.
+          </div>
+          <div className="form-group">
+            <label className="form-label">New private key (hex)</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                className="form-input mono"
+                type={showKey ? 'text' : 'password'}
+                placeholder="Leave blank to keep current key"
+                value={newPrivateKey}
+                onChange={e => setNewPrivateKey(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <button
+                className="btn btn-outline"
+                style={{ whiteSpace: 'nowrap', padding: '0 12px' }}
+                onClick={() => setShowKey(!showKey)}
+              >
+                {showKey ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            <div className="form-hint" style={{ marginTop: 4 }}>
+              Find it in MetaMask: Settings &gt; Security &gt; Reveal Private Key
+            </div>
+          </div>
+        </div>
+
+        <div className="card" style={{ borderColor: 'rgba(248, 113, 113, 0.2)', background: 'rgba(248, 113, 113, 0.04)' }}>
+          <div className="card-title" style={{ color: 'var(--red)' }}>Important</div>
+          <div style={{ fontSize: 13, lineHeight: 1.8, color: 'var(--text-secondary)' }}>
+            <div>Stop the bot before changing your wallet. Changing while trading could cause issues.</div>
+            <div>The new wallet must have USDC deposited on Hyperliquid to trade.</div>
+            <div>The private key must correspond to the wallet address above.</div>
+          </div>
         </div>
       </div>
 
