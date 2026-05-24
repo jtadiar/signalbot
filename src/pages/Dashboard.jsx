@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { startBot, stopBot, onBotEvent, isBotRunning } from '../lib/bot';
+import { readConfig } from '../lib/config';
 
 export default function Dashboard() {
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState('stopped');
   const [position, setPosition] = useState(null);
+  const [coin, setCoin] = useState('BTC');
   const [lastSignal, setLastSignal] = useState(null);
   const [dailyPnl, setDailyPnl] = useState(null);
   const [dailyFees, setDailyFees] = useState(0);
@@ -27,6 +29,9 @@ export default function Dashboard() {
         setStatus('running');
       }
     });
+    readConfig().then(cfg => {
+      if (cfg?.market?.coin) setCoin(cfg.market.coin);
+    }).catch(() => {});
   }, []);
 
   // Poll health every 5 seconds
@@ -414,7 +419,7 @@ export default function Dashboard() {
               Scanning for entry...
             </div>
             <div className="text-muted" style={{ fontSize: 12, marginTop: 6 }}>
-              Analysing EMA/ATR signals on BTC-PERP every {Math.round((position?.pollMs || 20000) / 1000)}s
+              Analysing EMA/ATR signals on {position?.coin || coin}-PERP every {Math.round((position?.pollMs || 20000) / 1000)}s
             </div>
             {lastSignal && (
               <div style={{ marginTop: 12, fontSize: 12, padding: '6px 12px', borderRadius: 99, background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>

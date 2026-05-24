@@ -91,9 +91,22 @@ function buildPositions(fills) {
   return positions;
 }
 
+// Display rounding per coin. HL prices below ~$1000 need more decimals than BTC.
+function pxRound(coin, px){
+  if (!Number.isFinite(Number(px))) return px;
+  const p = Number(px);
+  const abs = Math.abs(p);
+  if (abs >= 10000) return Math.round(p);
+  if (abs >= 1000) return Number(p.toFixed(1));
+  if (abs >= 100) return Number(p.toFixed(2));
+  if (abs >= 10) return Number(p.toFixed(3));
+  return Number(p.toFixed(4));
+}
+
 export default function TradeLog() {
   const [trades, setTrades] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [coin, setCoin] = useState('BTC');
 
   useEffect(() => {
     loadTrades();
@@ -105,7 +118,9 @@ export default function TradeLog() {
     try {
       const cfg = await readConfig();
       const wallet = cfg?.wallet?.address;
-      const coin = cfg?.market?.coin || 'BTC';
+      const cfgCoin = cfg?.market?.coin || 'BTC';
+      setCoin(cfgCoin);
+      const coin = cfgCoin;
       if (!wallet) { setTrades([]); setLoading(false); return; }
 
       const startMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
@@ -132,8 +147,8 @@ export default function TradeLog() {
 
       const rows = hlPositions.map(p => ({
         side: p.side,
-        entryPx: p.entrySz > 0 ? Math.round(p.entryWeighted / p.entrySz) : 0,
-        exitPx: p.closeSz > 0 ? Math.round(p.exitWeighted / p.closeSz) : null,
+        entryPx: p.entrySz > 0 ? pxRound(coin, p.entryWeighted / p.entrySz) : 0,
+        exitPx: p.closeSz > 0 ? pxRound(coin, p.exitWeighted / p.closeSz) : null,
         sizeBtc: p.entrySz || p.closeSz,
         pnlUsd: p.pnl - p.fees,
         ts: p.closeTime ? new Date(p.closeTime).toISOString() : new Date(p.openTime).toISOString(),
@@ -217,7 +232,7 @@ export default function TradeLog() {
                 <th>Time</th>
                 <th>Status</th>
                 <th>Side</th>
-                <th>Size (BTC)</th>
+                <th>Size ({coin})</th>
                 <th>Entry</th>
                 <th>Exit</th>
                 <th>PnL</th>

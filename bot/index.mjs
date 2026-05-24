@@ -3,7 +3,7 @@ import path from 'path';
 import { homedir } from 'os';
 import { Hyperliquid } from 'hyperliquid';
 import { computeSignal, ema } from './signal_engine.mjs';
-import { candleSnapshot, allMids, spotClearinghouseState } from './hl_info.mjs';
+import { candleSnapshot, allMids, spotClearinghouseState, perpMeta } from './hl_info.mjs';
 
 const IS_TAURI = !!process.env.TAURI;
 function tauriEmit(evt) {
@@ -395,14 +395,56 @@ if (state.halted && !state.haltDayUtc) {
   try { state.haltDayUtc = utcDayKey(state.lastActionAt || Date.now()); } catch (e) { logWarn('haltDayUtc', e); }
 }
 
+// Hyperliquid per-asset precision is provided by the perp meta universe.
+// Each asset declares `szDecimals` (size precision). Price precision for perps
+// is `min(5 significant figures, 6 - szDecimals decimal places)`.
+// We fetch this once at startup and cache it. Falls back to sane defaults so
+// the bot still trades if the meta call fails on boot.
+const SZ_DECIMALS_FALLBACK = { BTC: 5, ETH: 4, SOL: 2, HYPE: 2 };
+const PX_DECIMALS_FALLBACK = { BTC: 0, ETH: 1, SOL: 2, HYPE: 3 };
+const assetMeta = {}; // coin -> { szDecimals, pxDecimals }
+
+async function loadAssetMeta(){
+  try {
+    const m = await perpMeta();
+    const universe = Array.isArray(m?.universe) ? m.universe : [];
+    for (const a of universe){
+      if (!a?.name) continue;
+      const szDec = Number.isFinite(Number(a.szDecimals)) ? Number(a.szDecimals) : (SZ_DECIMALS_FALLBACK[a.name] ?? 2);
+      // For perps: max decimals = 6 - szDecimals. 5-sig-fig rule is applied per-price at order time;
+      // for the prices we use (close to mid, well above 1.0) the decimal cap dominates.
+      const pxDec = Math.max(0, 6 - szDec);
+      assetMeta[a.name] = { szDecimals: szDec, pxDecimals: pxDec };
+    }
+    console.log(nowIso(), `Loaded HL meta for ${Object.keys(assetMeta).length} assets.`);
+  } catch (e){
+    logWarn('loadAssetMeta', e);
+  }
+}
+
+function getSzDecimals(coin){
+  return assetMeta[coin]?.szDecimals ?? SZ_DECIMALS_FALLBACK[coin] ?? 2;
+}
+
+function getPxDecimals(coin){
+  return assetMeta[coin]?.pxDecimals ?? PX_DECIMALS_FALLBACK[coin] ?? 2;
+}
+
 function roundSz(coin, sz){
-  return Number(Number(sz).toFixed(5));
+  return Number(Number(sz).toFixed(getSzDecimals(coin)));
 }
 
 function roundPx(coin, px){
-  // HL BTC-PERP price increments are effectively whole dollars in UI.
-  const decimals = coin === 'BTC' ? 0 : 2;
-  return Number(Number(px).toFixed(decimals));
+  // HL perp prices: up to 5 sig figs AND at most (6 - szDecimals) decimal places.
+  // For BTC at ~$100k that's 0 decimals; for HYPE at ~$50 it's 4 decimals (capped to 5 sig figs).
+  const dec = getPxDecimals(coin);
+  const p = Number(px);
+  if (!Number.isFinite(p)) return p;
+  // Apply 5 sig fig cap (perp rule). Find magnitude, then limit decimals accordingly.
+  const abs = Math.abs(p);
+  const sigFigDec = abs > 0 ? Math.max(0, 4 - Math.floor(Math.log10(abs))) : dec;
+  const finalDec = Math.min(dec, sigFigDec);
+  return Number(p.toFixed(finalDec));
 }
 
 async function spotUsdc(){
@@ -1383,7 +1425,7 @@ async function tryEnter(){
 
       const msg = [
         SAF_ENABLED ? `HL SIGNALBOT [S&F] OPEN` : `HL SIGNALBOT OPEN`,
-        `${sig.side.toUpperCase()} BTC`,
+        `${sig.side.toUpperCase()} ${cfg.market.coin}`,
         `${roundSz(cfg.market.coin, totalSz)} @ ${roundPx(cfg.market.coin, avgPx)}`,
         `SL ${roundPx(cfg.market.coin, stopPx)}`,
         SAF_ENABLED ? 'Trailing exit' : (tps || null),
@@ -1619,6 +1661,9 @@ function onLoopError(e){
 console.log(nowIso(), 'HL signalbot starting', { wallet: cfg.wallet.address, coin: cfg.market.coin, pollMs: cfg.signal.pollMs, setAndForget: SAF_ENABLED });
 tauriEmit({ type: 'started' });
 if (SAF_ENABLED) tauriEmit({ type: 'log', message: 'Set & Forget mode active — trailing scalper profile loaded' });
+
+// Load HL asset precision (szDecimals / pxDecimals per coin) before first poll.
+await loadAssetMeta();
 
 // Prevent overlapping loops (can cause duplicate entries and duplicate TP/SL placement)
 let loopInFlight = false;

@@ -85,7 +85,10 @@ export default function Settings() {
       const next = JSON.parse(JSON.stringify(prev));
       const keys = path.split('.');
       let obj = next;
-      for (let i = 0; i < keys.length - 1; i++) obj = obj[keys[i]];
+      for (let i = 0; i < keys.length - 1; i++) {
+        if (obj[keys[i]] == null || typeof obj[keys[i]] !== 'object') obj[keys[i]] = {};
+        obj = obj[keys[i]];
+      }
       obj[keys[keys.length - 1]] = value;
       return next;
     });
@@ -596,6 +599,25 @@ export default function Settings() {
               <input type="checkbox" checked={String(config.signal?.blockShortIfGreenCandle ?? true).toLowerCase() !== 'false'} onChange={e => update('signal.blockShortIfGreenCandle', e.target.checked)} />
               <span>Block shorts on green candle <Tip text="Skip short entries if the 15m trigger candle closed green." /></span>
             </label>
+          </div>
+        </div>
+
+        {/* Trading Pair */}
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-title">Trading Pair</div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Coin <Tip text="Which Hyperliquid perp the bot trades. Changing this requires restarting the bot." /></label>
+            <select
+              className="form-input"
+              value={config.market?.coin || 'BTC'}
+              onChange={e => update('market.coin', e.target.value)}
+            >
+              <option value="BTC">BTC-PERP</option>
+              <option value="ETH">ETH-PERP</option>
+              <option value="SOL">SOL-PERP</option>
+              <option value="HYPE">HYPE-PERP</option>
+            </select>
+            <div className="form-hint">Restart bot after changing pair</div>
           </div>
         </div>
 

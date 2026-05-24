@@ -52,3 +52,7 @@ export async function allMids(){
 export async function spotClearinghouseState(user){
   return await postJson('https://api.hyperliquid.xyz/info', { type: 'spotClearinghouseState', user });
 }
+
+export async function perpMeta(){
+  return await postJson('https://api.hyperliquid.xyz/info', { type: 'meta' });
+}

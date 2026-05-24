@@ -255,6 +255,7 @@ export default function Setup({ onComplete }) {
                 <option value="BTC">BTC-PERP</option>
                 <option value="ETH">ETH-PERP</option>
                 <option value="SOL">SOL-PERP</option>
+                <option value="HYPE">HYPE-PERP</option>
               </select>
             </div>
             <div className="wizard-actions">
